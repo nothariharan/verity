@@ -13,6 +13,7 @@ import { EventLog } from "./log/event-log";
 import type { SttProvider, TtsProvider } from "./providers/speech";
 import { SessionHub } from "./session/hub";
 import { LiveVoice, type LiveSink } from "./session/live";
+import { patchWavHeader } from "./session/recorder";
 import { newId, type Session, type SessionBrain } from "./session/session";
 
 export interface AppDeps {
@@ -117,11 +118,27 @@ export async function buildApp(deps: AppDeps) {
     if (req.params.track !== "candidate" && req.params.track !== "verity") return reply.code(400).send({ error: "bad_track" });
     const path = join(process.cwd(), "data", "audio", req.params.id, `${req.params.track}.wav`);
     if (!existsSync(path)) return reply.code(404).send({ error: "no_audio" });
+    patchWavHeader(path);
     const size = statSync(path).size;
     reply.header("content-type", "audio/wav");
     reply.header("accept-ranges", "bytes");
-    reply.header("content-length", size);
-    return reply.send(createReadStream(path));
+    reply.header("cache-control", "no-store");
+
+    const range = req.headers.range;
+    if (!range) {
+      reply.header("content-length", size);
+      return reply.send(createReadStream(path));
+    }
+    const parsed = parseByteRange(range, size);
+    if (!parsed) {
+      reply.header("content-range", `bytes */${size}`);
+      return reply.code(416).send();
+    }
+    const { start, end } = parsed;
+    reply.code(206);
+    reply.header("content-range", `bytes ${start}-${end}/${size}`);
+    reply.header("content-length", end - start + 1);
+    return reply.send(createReadStream(path, { start, end }));
   });
 
   const voices = new Map<string, LiveVoice>();
@@ -217,6 +234,26 @@ function asPcm(data: Buffer | ArrayBuffer | Buffer[]): Uint8Array {
   if (Buffer.isBuffer(data)) return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
   if (data instanceof ArrayBuffer) return new Uint8Array(data);
   return new Uint8Array(Buffer.concat(data));
+}
+
+function parseByteRange(header: string, size: number): { start: number; end: number } | null {
+  const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (!match || size <= 0) return null;
+  const [, rawStart, rawEnd] = match;
+  if (rawStart === "" && rawEnd === "") return null;
+  let start: number;
+  let end: number;
+  if (rawStart === "") {
+    const suffix = Number(rawEnd);
+    if (!Number.isFinite(suffix) || suffix <= 0) return null;
+    start = Math.max(0, size - suffix);
+    end = size - 1;
+  } else {
+    start = Number(rawStart);
+    end = rawEnd === "" ? size - 1 : Number(rawEnd);
+  }
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || start >= size || end < start) return null;
+  return { start, end: Math.min(end, size - 1) };
 }
 
 async function fileToText(filename: string | undefined, buf: Buffer): Promise<string> {

@@ -1,5 +1,6 @@
 import { isValidQuestionText, type Belief, type Case, type Fact, type Likelihood, type Skill } from "@verity/contracts";
 import type { LlmProvider } from "../providers/llm/types";
+import { clipWindow } from "../session/clip-window";
 import { newId, type Session, type SessionBrain } from "../session/session";
 import { deriveStatus, ETA_PROVISIONAL, guardLikelihood, prior, update } from "./belief";
 import { suspectConflict } from "./ledger";
@@ -315,6 +316,9 @@ async function assess(
     ids.push(id);
     const span = Math.max(1, turn.endMs - turn.startMs);
     const at = Math.max(0, turn.text.indexOf(quote));
+    const quoteStart = turn.startMs + Math.round((at / Math.max(turn.text.length, 1)) * span);
+    const quoteEnd = turn.startMs + Math.round(((at + quote.length) / Math.max(turn.text.length, 1)) * span);
+    const sessionEdge = (s.state.meta?.durationSec ?? 900) * 1000;
     await s.emit({
       type: "RECEIPT_CREATED",
       payload: {
@@ -323,10 +327,7 @@ async function assess(
         questionId: s.state.questionOrder.at(-1) ?? "q_unknown",
         segmentIds: turn.segmentIds,
         quote,
-        clip: {
-          startMs: turn.startMs + Math.round((at / turn.text.length) * span),
-          endMs: turn.startMs + Math.round(((at + quote.length) / turn.text.length) * span),
-        },
+        clip: clipWindow(quoteStart, quoteEnd, sessionEdge),
         type: item.type,
         likelihood,
         rationale: item.rationale,

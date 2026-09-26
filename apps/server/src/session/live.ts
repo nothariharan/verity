@@ -34,6 +34,8 @@ export class LiveVoice {
   private speakingId: string | null = null;
   private candidateRec: WavRecorder;
   private verityRec: WavRecorder;
+  /** First candidate frame is padded so WAV sample 0 is session time 0. */
+  private aligned = false;
   private unsub: (() => void) | null = null;
   private tail: Promise<void> = Promise.resolve();
 
@@ -80,8 +82,19 @@ export class LiveVoice {
 
   write(pcm: Uint8Array) {
     if (this.closed || !pcm.byteLength) return;
+    this.alignClock();
     this.candidateRec.write(pcm);
     this.stream?.write(pcm);
+  }
+
+  /** Silence from t=0 up to the first frame, so a receipt clip time is a byte offset in candidate.wav. */
+  private alignClock() {
+    if (this.aligned) return;
+    this.aligned = true;
+    const capMs = (this.session.state.meta?.durationSec ?? 900) * 1000;
+    const at = Math.min(Math.max(0, this.session.now()), capMs);
+    const samples = Math.round((at / 1000) * this.candidateRec.sampleRate);
+    if (samples > 0) this.candidateRec.write(new Uint8Array(samples * 2));
   }
 
   vad(speaking: boolean) {

@@ -187,6 +187,7 @@ export class ElevenFlashTts implements TtsProvider {
         if (closed || done) return;
         startContext();
         enqueue({ text: textForTts(text), context_id: questionId, flush: true });
+        enqueue({ context_id: questionId, close_context: true });
       },
       close() {
         if (closed) return;
