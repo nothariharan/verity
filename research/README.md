@@ -18,6 +18,8 @@ This folder contains exhaustive market intelligence, technical feasibility analy
 | **[Subpage 06](file:///C:/Users/HARIHARAN/Desktop/BnB/research/06_TEN_TOOLS_DETAILED_REVIEW.md)** | **Critical Audit: 10 AI Interview Tools** | Deep deconstruction of 10 popular tools (Interview Sidekick, HireVue, VMock, Pramp, Karat, CoderPad, MyInterview, PrepAI, Sapia, Google Warmup) vs. ground truth. |
 | **[Subpage 07](file:///C:/Users/HARIHARAN/Desktop/BnB/research/07_POLISHED_SYSTEM_DESIGN_AND_25_ALGORITHMS.md)** | **Polished System Design & 25 Core Algorithms** | Live Knowledge Graph, Evidence Debt, sub-500ms voice loop, smart barge-in interruption, and 25 mathematical/code algorithms. |
 | **[Subpage 08](file:///C:/Users/HARIHARAN/Desktop/BnB/research/08_FRONTIER_ARXIV_RESEARCH_AND_3_INSANE_IDEAS.md)** | **Frontier Research & 3 Breakthrough Architectures** | MIT Battleship Active Learning, MimiTalk Dual-Agent Constitutional AI, LSE & 70k field experiment, and 3 breakthrough hackathon architectures. |
+| **[Subpage 09](file:///C:/Users/HARIHARAN/Desktop/BnB/research/09_FULL_BUILD_AND_IMPLEMENTATION_PLAN.md)** | **Full Build & Execution Blueprint** | Detailed 4-state duplex loop code, data models, repository structure, and 48-hour hackathon execution roadmap. |
+| **[Subpage 10](file:///C:/Users/HARIHARAN/Desktop/BnB/research/10_ADVANCED_ANTI_CHEAT_AND_AUTHENTICITY_FACTORS.md)** | **Advanced Anti-Cheat & Authenticity Factors** | 10 browser-native signals (reading saccades, TTFT onset latency, virtual audio cables, keystroke soundprints, Socratic honeypots) + UI references. |
 
 ---
 
