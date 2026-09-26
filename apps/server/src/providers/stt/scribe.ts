@@ -31,7 +31,7 @@ export class ScribeStt implements SttProvider {
   async open(events: SttEvents, opts: { keyterms?: string[] }): Promise<SttStream> {
     if (!this.apiKey) {
       events.onError(new Error("ELEVENLABS_API_KEY is not set"));
-      return { write() {}, async close() {} };
+      return { write() {}, commit() {}, async close() {} };
     }
 
     const ws = new WebSocket(scribeRealtimeUrl(this.model, opts.keyterms), {
@@ -121,6 +121,10 @@ export class ScribeStt implements SttProvider {
       write(frame) {
         if (closed || frame.byteLength === 0) return;
         sendChunk(frame, false);
+      },
+      commit() {
+        if (closed || ws.readyState !== WebSocket.OPEN) return;
+        sendChunk(new Uint8Array(), true);
       },
       async close() {
         if (closed) return;

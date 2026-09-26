@@ -19,6 +19,7 @@ class ScriptStt implements SttProvider {
         sent = this.text;
         events.onPartial(this.text);
       },
+      commit() {},
       close: async () => {},
     };
   }

@@ -22,7 +22,7 @@ Verity's voice should feel like a person who listens: always hearing, never talk
 
 ### LISTEN
 - STT streams; partials → `SEGMENT_PARTIAL`; finals → `SEGMENT_FINAL`.
-- **Turn detection (ours, ADR-016):** emit `EARLY_END_OF_TURN`, `TURN_RESUMED`, `END_OF_TURN` from these rules: endpoint 700 ms base; hold up to 3.0 s if the last words are a connective/filler (`because, and, so, but, then, which, like, um, uh, I mean, basically`); hold 1.5 s after < 3 words unless it's a complete short answer ("yes", "no", "I'm not sure"). Early end-of-turn = endpoint − 300 ms.
+- **Turn detection (ours, ADR-016):** emit `EARLY_END_OF_TURN`, `TURN_RESUMED`, `END_OF_TURN` from these rules: endpoint 700 ms base after a sentence ending; hold 2.0 s when a longer answer has no sentence ending yet; hold up to 3.0 s if the last words are a connective/filler (`because, and, so, but, then, which, like, um, uh, I mean, basically`); hold 1.5 s after < 3 words unless it's a complete short answer ("yes", "no", "I'm not sure"). The silence clock pauses while the candidate's mic is still active. Early end-of-turn = endpoint − 300 ms. Scribe does not decide the end.
 - Text mode: `TEXT_ANSWER` = immediate `END_OF_TURN`.
 
 ### ACK (acknowledgement)

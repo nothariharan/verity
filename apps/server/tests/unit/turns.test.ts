@@ -47,6 +47,17 @@ describe("turns", () => {
     expect(step.events).toContain("final");
   });
 
+  it("waits 2s before cutting an unfinished answer", () => {
+    const line = "So, like, I did it via, like, when we have different kind of multi execution";
+    let step = onPartial(createTurnState(), line, 0);
+    step = onSilenceTick(step.state, 800);
+    expect(step.events).not.toContain("final");
+    step = onSilenceTick(step.state, 1_999);
+    expect(step.events).not.toContain("final");
+    step = onSilenceTick(step.state, 2_000);
+    expect(step.events).toContain("final");
+  });
+
   it("keeps the 700ms base for a multi-word complete short answer", () => {
     let step = onPartial(createTurnState(), "I'm not sure.", 0);
     step = onSilenceTick(step.state, 800);

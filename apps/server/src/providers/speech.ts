@@ -15,6 +15,8 @@ export interface SttEvents {
 export interface SttStream {
   /** PCM16 LE mono 16 kHz. */
   write(frame: Uint8Array): void;
+  /** End the current utterance so the next partial is only new speech. */
+  commit(): void;
   close(): Promise<void>;
 }
 
@@ -38,7 +40,7 @@ export class FakeStt implements SttProvider {
   last: SttEvents | null = null;
   async open(events: SttEvents): Promise<SttStream> {
     this.last = events;
-    return { write: () => {}, close: async () => {} };
+    return { write: () => {}, commit() {}, close: async () => {} };
   }
   emitPartial(text: string) {
     this.last?.onPartial(text);

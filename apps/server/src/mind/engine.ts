@@ -135,6 +135,7 @@ export function createEngine(llm: LlmProvider | null): { brain: SessionBrain; on
       await askNext(s, llm);
     },
     async onCandidateTurn(s, turn) {
+      await noteTiming(s, turn);
       const qid = [...s.state.questionOrder].reverse().find((id) => s.state.questions[id]!.caseId !== "case_meta");
       const q = qid ? s.state.questions[qid] : undefined;
       const c = q ? s.state.cases[q.caseId] : undefined;
@@ -341,6 +342,9 @@ async function assess(
   }
   const usable = evidence.filter((e) => e.quote && turn.text.includes(e.quote));
   const items = usable.length ? usable : [heuristicEvidence(turn.text)];
+  const priorQuotes = (s.state.cases[c.id]?.receiptIds ?? [])
+    .map((id) => s.state.receipts[id]?.quote ?? "")
+    .filter(Boolean);
 
   const origin = turnBase.get(turnKey(s.id, c.id)) ?? c.belief;
   turnBase.delete(turnKey(s.id, c.id));
@@ -349,6 +353,8 @@ async function assess(
   const ids: string[] = [];
   for (const item of items.slice(0, 3)) {
     const quote = turn.text.includes(item.quote) ? item.quote : turn.text.slice(0, 180);
+    if (priorQuotes.some((prev) => sameQuote(prev, quote))) continue;
+    priorQuotes.push(quote);
     const likelihood = guardLikelihood(item.type, item.likelihood as Likelihood);
     const before = belief;
     const after = update(before, likelihood);
@@ -377,6 +383,7 @@ async function assess(
       },
     });
   }
+  if (!ids.length) return;
   const m = memoOf(s.id, c.id);
   m.lastEvidence = items[0]!.type;
   const known = s.state.facts.filter((f) => f.caseId === c.id);
@@ -509,6 +516,35 @@ async function noteEarly(s: Session, llm: LlmProvider | null, text: string) {
     }
   }
   drafts.set(s.id, { caseId: decision.caseId, kind: decision.kind, branch: pickBranch(base, after), text: drafted });
+}
+
+/** A long quiet gap, then a long answer with almost no fillers. A timing note only. */
+async function noteTiming(s: Session, turn: { text: string; startMs: number }) {
+  const qid = [...s.state.questionOrder].reverse().find((id) => s.state.questions[id]!.caseId !== "case_meta");
+  const q = qid ? s.state.questions[qid] : undefined;
+  if (!q) return;
+  const gap = turn.startMs - (q.spokenEndMs ?? q.committedMs);
+  const words = turn.text.trim().split(/\s+/).filter(Boolean);
+  if (gap < 6_000 || words.length < 25) return;
+  const fillers = words.filter((word) => /^(um|uh|like|so|yeah|okay|ok|hmm|ah|er)$/i.test(word.replace(/[^a-z']/gi, "")));
+  if (fillers.length / words.length > 0.08) return;
+  await s.emit({
+    type: "OBSERVATION",
+    payload: {
+      id: newId("obs"),
+      kind: "SILENCE_THEN_FLUENT",
+      startMs: turn.startMs,
+      detail: "A long pause, then an extended answer with little filler",
+      duringQuestionId: q.id,
+    },
+  });
+}
+
+function sameQuote(a: string, b: string): boolean {
+  const left = a.toLowerCase().replace(/[^a-z0-9'\s]+/g, " ").replace(/\s+/g, " ").trim();
+  const right = b.toLowerCase().replace(/[^a-z0-9'\s]+/g, " ").replace(/\s+/g, " ").trim();
+  if (!left || !right) return false;
+  return left === right || left.startsWith(right) || right.startsWith(left);
 }
 
 function heuristicFacts(answer: string, label: string) {

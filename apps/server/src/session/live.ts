@@ -30,8 +30,21 @@ export class LiveVoice {
   private vadSpeaking = false;
   private veritySpeaking = false;
   private overlapSent = false;
+  /** Question the overlap note was last considered for. One note per question. */
+  private overlapFor = "";
   private prepared: TtsContext | null = null;
+  private active: TtsContext | null = null;
   private speakingId: string | null = null;
+  private speakToken = 0;
+  private finishSpeak: (() => void) | null = null;
+  private speechChain: Promise<void> = Promise.resolve();
+  private speechQueue: { id: string; text: string }[] = [];
+  /** Everything Verity has been asked to say, so the mic can ignore that echo. */
+  private spokenAloud = "";
+  /** Candidate speech already closed into a turn. Later cumulative transcripts must not file it again. */
+  private answered = "";
+  /** PCM bytes since the last Scribe commit. A commit under 0.3s makes Scribe drop the utterance. */
+  private pcmSinceCommit = 0;
   private candidateRec: WavRecorder;
   private verityRec: WavRecorder;
   /** First candidate frame is padded so WAV sample 0 is session time 0. */
@@ -60,7 +73,7 @@ export class LiveVoice {
     this.unsub = this.session.log.subscribe(this.session.id, (e) => {
       if (e.type === "QUESTION_COMMITTED" && !this.session.state.textMode) {
         const { id, text } = e.payload;
-        setImmediate(() => void this.speak(id, text));
+        this.enqueueSpeech(id, text);
       }
       if (e.type === "SESSION_ENDED") setImmediate(() => void this.close());
     });
@@ -84,6 +97,7 @@ export class LiveVoice {
     if (this.closed || !pcm.byteLength) return;
     this.alignClock();
     this.candidateRec.write(pcm);
+    this.pcmSinceCommit += pcm.byteLength;
     this.stream?.write(pcm);
   }
 
@@ -99,14 +113,17 @@ export class LiveVoice {
 
   vad(speaking: boolean) {
     this.vadSpeaking = speaking;
-    if (!speaking) this.overlapSent = false;
+    const q = this.session.state.questionOrder.at(-1) ?? "";
+    if (q !== this.overlapFor) {
+      this.overlapFor = q;
+      this.overlapSent = false;
+    }
     const idle = this.lastPartialAt ? Date.now() - this.lastPartialAt : 0;
     if (
       !this.overlapSent &&
       overlapHeuristic({ candidateTranscriptIdleMs: idle, vadSpeaking: speaking, veritySpeaking: this.veritySpeaking })
     ) {
       this.overlapSent = true;
-      const q = this.session.state.questionOrder.at(-1);
       void this.session.emit({
         type: "OBSERVATION",
         payload: {
@@ -114,7 +131,7 @@ export class LiveVoice {
           kind: "SECOND_VOICE_POSSIBLE",
           startMs: this.session.now(),
           detail: SECOND_VOICE_DETAIL,
-          duringQuestionId: q,
+          duringQuestionId: q || undefined,
         },
       });
     }
@@ -124,8 +141,9 @@ export class LiveVoice {
   /** A partial (or the same text again). Tests pass `nowMs` so they do not wait on the clock. */
   hear(text: string, nowMs: number) {
     if (this.closed || this.session.state.textMode) return;
-    const spoken = this.currentQuestion();
-    if (spoken && isEcho(text, spoken)) return;
+    const candidate = freshWords(candidateUtterance(text, this.spokenAloud), this.answered);
+    if (!candidate) return;
+    text = candidate;
     if (text !== this.turn.text) this.lastPartialAt = nowMs;
     const decision = decideTurn(this.turn, text, nowMs);
     this.turn = decision.state;
@@ -142,14 +160,28 @@ export class LiveVoice {
     return this.tail.then(() => this.session.idle());
   }
 
+  /** Resolves once every queued utterance has finished speaking. */
+  whenSpoken() {
+    return this.speechChain;
+  }
+
   pump(nowMs: number) {
     if (!this.turn.text) return;
+    // Mic still open: Scribe often pauses on "like" / "so" while the person is talking.
+    // Do not start the next question until the mic has gone quiet, unless the text has been stuck for a long time.
+    const stalled = this.turn.changedAtMs === null ? 0 : nowMs - this.turn.changedAtMs;
+    if (this.vadSpeaking && stalled < 8_000) return;
     this.hear(this.turn.text, nowMs);
   }
 
   async close() {
     if (this.closed) return;
     this.closed = true;
+    this.speechQueue.length = 0;
+    this.speakToken += 1;
+    this.active?.close();
+    this.active = null;
+    this.completeSpeak();
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
     this.unsub?.();
@@ -176,13 +208,15 @@ export class LiveVoice {
       if (event === "final") {
         if (this.finishing) return;
         this.finishing = true;
+        this.answered = this.answered ? `${this.answered} ${turn.text}` : turn.text;
         this.turn = createTurnState();
         this.published = "";
+        this.segId = "";
+        this.commitStt();
         this.sink.json({ type: "ACK", clip: "mm-hm" });
         await this.session.spokenAnswer(turn);
         this.finishing = false;
         return;
-        this.segId = "";
       }
     }
   }
@@ -202,14 +236,47 @@ export class LiveVoice {
 
   private async preopen() {
     if (this.prepared || this.closed) return;
-    this.prepared = await this.tts.open("speculative", (pcm) => this.onPcm(pcm), () => this.onDone());
+    this.prepared = await this.tts.open("speculative", () => {}, () => {});
   }
 
-  private async speak(questionId: string, text: string) {
-    if (this.closed || this.session.state.textMode) return;
+  /** One utterance at a time. The greeting must finish before the first question starts. */
+  private enqueueSpeech(id: string, text: string) {
+    this.speechQueue.push({ id, text });
+    this.speechChain = this.speechChain.then(() => this.pumpSpeech());
+  }
+
+  private async pumpSpeech() {
+    const next = this.speechQueue.shift();
+    if (!next || this.closed) return;
+    await this.speak(next.id, next.text);
+    if (this.speechQueue.length) await this.pumpSpeech();
+  }
+
+  private speak(questionId: string, text: string): Promise<void> {
+    if (this.closed || this.session.state.textMode) return Promise.resolve();
+    return new Promise((resolve) => {
+      this.finishSpeak = resolve;
+      void this.beginSpeak(questionId, text).catch(() => this.completeSpeak());
+    });
+  }
+
+  private async beginSpeak(questionId: string, text: string) {
+    const token = ++this.speakToken;
     this.speakingId = questionId;
-    const ctx = this.prepared ?? (await this.tts.open(questionId, (pcm) => this.onPcm(pcm), () => this.onDone()));
+    this.spokenAloud = `${this.spokenAloud} ${text}`.trim();
+    this.prepared?.close();
     this.prepared = null;
+    const ctx = await this.tts.open(
+      questionId,
+      (pcm) => this.onPcm(token, pcm),
+      () => this.onDone(token),
+    );
+    if (token !== this.speakToken || this.closed) {
+      ctx.close();
+      this.completeSpeak();
+      return;
+    }
+    this.active = ctx;
     this.veritySpeaking = true;
     this.sink.json({ type: "TTS_BEGIN", questionId, sampleRate: this.tts.sampleRate });
     await this.session.emit({ type: "VERITY_AUDIO_STARTED", payload: { questionId } });
@@ -217,32 +284,56 @@ export class LiveVoice {
     ctx.speak(text);
   }
 
-  private onPcm(pcm: Uint8Array) {
-    if (!this.speakingId || !pcm.byteLength) return;
+  private onPcm(token: number, pcm: Uint8Array) {
+    if (token !== this.speakToken || !this.speakingId || !pcm.byteLength) return;
     this.verityRec.write(pcm);
     this.sink.pcm(pcm);
   }
 
-  private onDone() {
+  private onDone(token: number) {
+    if (token !== this.speakToken) return;
     const questionId = this.speakingId;
     this.veritySpeaking = false;
     this.speakingId = null;
-    if (!questionId) return;
-    this.sink.json({ type: "TTS_END", questionId });
-    void this.session.emit({ type: "VERITY_AUDIO_ENDED", payload: { questionId } });
-    void this.markVoice("LISTEN", "question finished");
+    this.active = null;
+    if (questionId) {
+      this.sink.json({ type: "TTS_END", questionId });
+      void this.session.emit({ type: "VERITY_AUDIO_ENDED", payload: { questionId } });
+      void this.markVoice("LISTEN", "question finished");
+      this.commitStt();
+    }
+    this.completeSpeak();
   }
 
   private async yieldToCandidate() {
     if (!this.veritySpeaking || !this.speakingId) return;
     const questionId = this.speakingId;
-    this.veritySpeaking = false;
-    this.speakingId = null;
+    this.speechQueue.length = 0;
+    this.speakToken += 1;
+    this.active?.close();
+    this.active = null;
     this.prepared?.close();
     this.prepared = null;
+    this.veritySpeaking = false;
+    this.speakingId = null;
     this.sink.json({ type: "YIELD", questionId });
     await this.session.emit({ type: "QUESTION_INTERRUPTED", payload: { questionId, atChar: 0 } });
     await this.markVoice("YIELD", "candidate spoke over the question");
+    this.completeSpeak();
+  }
+
+  /** Scribe rejects a commit with less than 0.3s of audio and can stall the transcript after that. */
+  private commitStt() {
+    const minBytes = 16_000 * 2 * 0.3;
+    if (this.pcmSinceCommit < minBytes) return;
+    this.pcmSinceCommit = 0;
+    this.stream?.commit();
+  }
+
+  private completeSpeak() {
+    const done = this.finishSpeak;
+    this.finishSpeak = null;
+    done?.();
   }
 
   private async markVoice(to: "LISTEN" | "ACK" | "SPEAK" | "YIELD", reason: string) {
@@ -251,10 +342,6 @@ export class LiveVoice {
     await this.session.emit({ type: "VOICE_STATE", payload: { from, to, reason } });
   }
 
-  private currentQuestion() {
-    const id = this.session.state.questionOrder.at(-1);
-    return id ? this.session.state.questions[id]?.text ?? "" : "";
-  }
 }
 
 function contentWords(text: string) {
@@ -268,11 +355,54 @@ function tokenSet(text: string) {
   return new Set(text.toLowerCase().match(/[a-z0-9']+/g) ?? []);
 }
 
-function isEcho(partial: string, spoken: string) {
-  const a = tokenSet(spoken);
-  const b = tokenSet(partial);
-  if (!a.size || !b.size) return false;
-  let hit = 0;
-  for (const t of b) if (a.has(t)) hit += 1;
-  return hit / (a.size + b.size - hit) >= 0.8;
+/**
+ * Drop a transcript that is only Verity's own voice.
+ * A partial that starts with that echo and then continues in the candidate's words
+ * keeps the candidate's words.
+ */
+/** Words Scribe repeats from an answer that was already closed. */
+export function freshWords(partial: string, already: string): string {
+  const answered = normalizeSpace(already);
+  const incoming = partial.trim();
+  if (!incoming) return "";
+  if (!answered) return incoming;
+  const words = incoming.split(/\s+/);
+  let acc = "";
+  let index = 0;
+  for (; index < words.length; index += 1) {
+    const next = normalizeSpace(acc ? `${acc} ${words[index]}` : words[index]!);
+    if (!answered.startsWith(next)) break;
+    acc = next;
+    if (acc === answered) {
+      index += 1;
+      break;
+    }
+  }
+  if (acc !== answered) return incoming;
+  return words.slice(index).join(" ").trim();
+}
+
+function normalizeSpace(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[’‘]/g, "'")
+    .replace(/[^a-z0-9'\s]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function candidateUtterance(partial: string, spoken: string): string {
+  const said = tokenSet(spoken);
+  const words = partial.split(/\s+/).filter(Boolean);
+  if (!words.length) return "";
+  if (!said.size) return partial.trim();
+  let start = 0;
+  while (start < words.length) {
+    const token = words[start]!.toLowerCase().replace(/[^a-z0-9']/g, "");
+    if (token && !said.has(token) && !FILLERS.has(token)) break;
+    start += 1;
+  }
+  const rest = words.slice(start).join(" ").trim();
+  const novel = contentWords(rest).filter((word) => !said.has(word));
+  return novel.length ? rest : "";
 }

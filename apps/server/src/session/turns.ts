@@ -18,6 +18,8 @@ const BASE_MS = 700;
 const EARLY_LEAD_MS = 300;
 const CONNECTIVE_HOLD_MS = 3000;
 const SHORT_HOLD_MS = 1500;
+/** A long answer with no sentence ending is still in progress. Wait before cutting it. */
+const OPEN_HOLD_MS = 2000;
 
 /** Longest first so "i mean" wins over a shorter tail. */
 const CONNECTIVES = ["i mean", "basically", "because", "and", "so", "but", "then", "which", "like", "um", "uh"];
@@ -72,12 +74,15 @@ export function onSilenceTick(state: TurnState, nowMs: number): TurnDecision {
  * Trailing connective/filler holds up to 3s.
  * Under 3 words holds 1.5s, including "Yes." and "No." (voice script V3).
  * "I'm not sure" and "I don't remember" are 3 words, so they keep the 700ms base.
+ * A longer answer that has not reached a sentence ending holds 2s, so a breath
+ * or a filler ("like", "so") does not start the next question.
  */
 function endpointSilenceMs(text: string): number {
   const norm = normalizeUtterance(text);
   if (!norm) return BASE_MS;
   if (endsWithConnective(norm)) return CONNECTIVE_HOLD_MS;
   if (countWords(norm) < 3) return SHORT_HOLD_MS;
+  if (!/[.?!]["']?$/.test(text.trim())) return OPEN_HOLD_MS;
   return BASE_MS;
 }
 
