@@ -28,7 +28,7 @@ Statuses: `todo` · `in-progress` · `verified` · `cut`
 
 | Phase | Name | Delivers | Status |
 |---|---|---|---|
-| P0 | Foundations | Monorepo, zod contracts, hash-chained event log, fakes, CI | todo |
+| P0 | Foundations | Monorepo, zod contracts, hash-chained event log, fakes, CI | verified (CI run pending) |
 | P1 | Case engine (text) | Claims → cases → belief updates → discriminating questions, typed answers | todo |
 | P2 | Case board | Live 2D board with belief rings and receipts panel | todo |
 | P3 | Listening | ElevenLabs Scribe streaming, turn rules, live provisional belief | todo |
