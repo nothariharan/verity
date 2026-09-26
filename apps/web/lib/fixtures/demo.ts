@@ -170,9 +170,11 @@ function build(): VerityEvent[] {
   };
 
   push("SESSION_CREATED", { mode: "recruiter", durationSec: 900, role: DEMO_ROLE, candidateName: DEMO_CANDIDATE }, 0);
+  push("SKILL_ADDED", { id: "skill_kafka01", name: "Kafka", importance: 0.8, requirement: "required" }, 0);
+  push("SKILL_ADDED", { id: "skill_cuda0001", name: "CUDA", importance: 0.7, requirement: "required" }, 0);
   for (const c of CASES) {
     const kase: Case = {
-      id: c.id, label: c.label, claim: c.claim, sourceSpan: c.claim, skillIds: [], technologies: c.tech, metrics: c.metrics,
+      id: c.id, label: c.label, claim: c.claim, sourceSpan: c.claim, skillIds: c.id === "case_kafka" ? ["skill_kafka01"] : [], technologies: c.tech, metrics: c.metrics,
       importance: c.importance, prior: c.prior, belief: c.prior, provisional: false, status: "UNTOUCHED", conflict: false,
       probes: 0, probeBudget: 3, receiptIds: [], questionIds: [], openingQuestion: c.opening,
     };

@@ -9,7 +9,7 @@ import { Dossier } from "./dossier";
 export function DossierLoader({ id, practice }: { id: string; practice?: boolean }) {
   const demo = id.startsWith("demo") || id === "ses_demo00000001";
   const [events, setEvents] = useState<VerityEvent[] | null>(demo ? DEMO_EVENTS : null);
-  const [chain, setChain] = useState<{ ok: boolean; count: number } | null>(null);
+  const [chain, setChain] = useState<{ ok: boolean; count: number; brokenAtSeq?: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {

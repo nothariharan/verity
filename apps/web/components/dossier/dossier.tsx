@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { playCandidateClip } from "@/lib/clip-playback";
-import { reduceAll, type CaseStatus, type Receipt, type VerityEvent } from "@verity/contracts";
+import { depthShown, reduceAll, roleCoverage, type CaseStatus, type Receipt, type VerityEvent } from "@verity/contracts";
 import { BeliefRing } from "@/components/case/belief-ring";
 import { Panel, ReceiptCard, Transcript } from "@/components/board/panels";
 import { DemoBadge, Pill } from "@/components/ui/primitives";
@@ -27,7 +27,7 @@ export function Dossier({
   events: readonly VerityEvent[];
   demo?: boolean;
   practice?: boolean;
-  chain?: { ok: boolean; count: number } | null;
+  chain?: { ok: boolean; count: number; brokenAtSeq?: number } | null;
   sessionId?: string;
 }) {
   const full = useMemo(() => reduceAll(events), [events]);
@@ -41,6 +41,7 @@ export function Dossier({
   const asked = cases.filter((c) => c.status !== "UNTOUCHED");
   const counts = COUNT_ORDER.map((k) => ({ ...k, n: asked.filter((c) => finalStatus(c, ended) === k.key).length }));
   const conflicts = cases.filter((c) => c.conflict).length;
+  const coverage = roleCoverage(full);
   const receipts = full.receiptOrder.map((id) => full.receipts[id]!);
 
   const play = (r: Receipt) => {
@@ -82,6 +83,21 @@ export function Dossier({
       </header>
 
       <p className="text-[12.5px] text-muted">No overall score. Each claim is resolved on its own evidence, and every change links to a receipt below.</p>
+
+      {coverage.length > 0 && (
+        <Panel title="Role coverage">
+          <ul className="divide-y divide-line">
+            {coverage.map((row) => (
+              <li key={row.skill.id} className="flex flex-wrap items-baseline justify-between gap-2 py-2 text-[13px]">
+                <span className="font-medium">{row.skill.name}</span>
+                <span className="text-[11.5px] uppercase tracking-wide text-muted">{row.skill.requirement}</span>
+                <span className="min-w-[40%] flex-1 text-ink-2">{row.claimed ? row.caseLabels.join(" · ") : "Not claimed"}</span>
+                <span className="text-muted">{row.settled === "not_claimed" ? "—" : STATUS_LABEL[row.settled]}</span>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      )}
 
       <Panel title="Time scrubber" right={<span className="font-mono text-[12px]">{formatClock(t)}</span>}>
         <div className="relative">
@@ -145,6 +161,7 @@ export function Dossier({
                     <h3 className="text-[18px] font-semibold tracking-[-0.02em]">{c.label}</h3>
                     <p className="mt-1 text-[13px] text-muted">Resume: “{c.claim}”</p>
                     <p className="mt-2 text-[12.5px] text-ink-2">{HYP_BLURB[st === "SETTLED_OWNED" ? "owned" : st === "SETTLED_CONTRIBUTED" ? "contributed" : st === "SETTLED_SURFACE" ? "surface" : "open"]}</p>
+                    <p className="mt-1 text-[12px] text-muted">Depth shown in this interview: {depthShown(c, full.questions, full.receipts)}</p>
                     <ol className="mt-4 space-y-1.5 border-l border-line pl-4">
                       {c.questionIds.map((qid) => {
                         const q = full.questions[qid]!;
@@ -161,7 +178,12 @@ export function Dossier({
                 {rs.length > 0 && (
                   <div className="mt-5 grid gap-3 md:grid-cols-2">
                     {rs.map((r) => (
-                      <ReceiptCard key={r.id} r={r} onPlay={play} />
+                      <ReceiptCard
+                        key={r.id}
+                        r={r}
+                        onPlay={play}
+                        label={full.questions[r.questionId]?.kind === "reply" ? "Added in reply" : undefined}
+                      />
                     ))}
                   </div>
                 )}
@@ -211,13 +233,13 @@ export function Dossier({
   );
 }
 
-function ChainChip({ demo, chain, events }: { demo?: boolean; chain?: { ok: boolean; count: number } | null; events: number }) {
+function ChainChip({ demo, chain, events }: { demo?: boolean; chain?: { ok: boolean; count: number; brokenAtSeq?: number } | null; events: number }) {
   if (demo || !chain) {
     return <Pill color="var(--line-strong)">{demo ? `Scripted log · ${events} events` : "Verifying record…"}</Pill>;
   }
   return (
     <Pill color={chain.ok ? "var(--owned)" : "var(--conflict)"} className={cn(!chain.ok && "border-conflict/40")}>
-      {chain.ok ? `Record intact · ${chain.count} events` : "Record altered after the interview"}
+      {chain.ok ? `Record intact · ${chain.count} events` : `Record altered after event ${chain.brokenAtSeq ?? "?"}`}
     </Pill>
   );
 }

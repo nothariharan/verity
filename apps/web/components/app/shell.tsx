@@ -25,7 +25,7 @@ export function AppShell({ role, children }: { role: "team" | "candidate"; child
 
   return (
     <div className="flex min-h-screen bg-bg">
-      <aside className="sticky top-0 hidden h-screen w-[232px] shrink-0 flex-col border-r border-line bg-bg px-3 py-4 md:flex">
+      <aside className="sticky top-0 hidden h-screen w-[232px] shrink-0 flex-col border-r border-line bg-bg px-3 py-4 print:hidden md:flex">
         <Link href="/" className="px-2 pb-6 pt-1">
           <Logo />
         </Link>
@@ -59,7 +59,7 @@ export function AppShell({ role, children }: { role: "team" | "candidate"; child
         </div>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-12 items-center justify-between border-b border-line px-4 md:hidden">
+        <header className="flex h-12 items-center justify-between border-b border-line px-4 print:hidden md:hidden">
           <Link href="/"><Logo /></Link>
           <RoleSwitch role={role} />
         </header>
