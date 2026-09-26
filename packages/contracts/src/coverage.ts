@@ -1,4 +1,5 @@
-import type { Case, CaseStatus, Question, Receipt, SessionState, Skill } from "./domain";
+import type { Case, CaseStatus, Question, Receipt, Skill } from "./domain";
+import type { SessionState } from "./reducer";
 
 const RANK: Record<CaseStatus, number> = {
   UNTOUCHED: 0,
