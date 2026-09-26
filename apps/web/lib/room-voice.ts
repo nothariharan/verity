@@ -42,7 +42,7 @@ export function useRoomVoice(opts: {
         stop();
         ducked = false;
       }
-      if (msg.type === "ACK") blip();
+      if (msg.type === "ACK") blip(msg.clip);
     });
     onEnded(() => {
       const questionId = questionRef.current;
@@ -111,7 +111,13 @@ export function useRoomVoice(opts: {
   };
 }
 
-function blip() {
+function blip(clip = "mm-hm") {
+  const audio = new Audio(`/audio/acks/${clip}.mp3`);
+  audio.volume = 0.45;
+  void audio.play().catch(() => tone());
+}
+
+function tone() {
   const ctx = new AudioContext();
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();

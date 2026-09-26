@@ -30,7 +30,8 @@ function settled(c: Case) {
 
 export function caseValue(c: Case, memo: CaseMemo, ctx: { activeId: string | null; remainingMs: number }): number {
   const active = c.id === ctx.activeId;
-  if (c.probes >= c.probeBudget) return 0;
+  const fatigue = c.probes < c.probeBudget ? 1 : 0;
+  if (fatigue === 0) return 0;
   if (settled(c)) {
     const cfOk = c.belief.owned >= SETTLE && c.importance >= 0.8 && !memo.counterfactualAsked;
     if (!cfOk) return 0;
@@ -40,7 +41,7 @@ export function caseValue(c: Case, memo: CaseMemo, ctx: { activeId: string | nul
   const timeFit = ctx.remainingMs >= ARC.normalUntilMs ? 1 : active ? 1 : 0.2;
   const continuity = active && (memo.lastEvidence === "vague" || memo.lastEvidence === "non_answer") ? 1.3 : 1;
   const conflictBoost = memo.conflictSuspected ? 1.6 : 1;
-  return c.importance * uncertainty * timeFit * continuity * conflictBoost;
+  return c.importance * uncertainty * timeFit * fatigue * continuity * conflictBoost;
 }
 
 export function chooseKind(c: Case, memo: CaseMemo): { kind: QuestionKind; tiedPair?: [Hypothesis, Hypothesis] } {

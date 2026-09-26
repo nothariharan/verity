@@ -12,6 +12,8 @@ export interface Config {
   };
   elevenlabs: { apiKey?: string; sttModel: string; ttsModel: string; voiceId?: string };
   webOrigin: string[];
+  /** Bearer token for POST /mcp. Unset leaves the route open for local use. */
+  mcpApiKey?: string;
 }
 
 export type LlmRole = "extractor" | "assessor" | "live" | "drafter" | "summary";
@@ -51,6 +53,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       ttsModel: env.ELEVENLABS_TTS_MODEL ?? "eleven_flash_v2_5",
       voiceId: nonEmpty(env.ELEVENLABS_VOICE_ID),
     },
-    webOrigin: (env.WEB_ORIGIN ?? "http://localhost:3000").split(","),
+    webOrigin: (env.WEB_ORIGIN ?? "http://localhost:3000")
+      .split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean),
+    mcpApiKey: nonEmpty(env.VERITY_API_KEY),
   };
 }

@@ -4,7 +4,7 @@ import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import websocket from "@fastify/websocket";
 import Fastify from "fastify";
-import { ClientMessage, reduceAll, SessionMode, type VerityEvent } from "@verity/contracts";
+import { ClientMessage, SessionMode, type VerityEvent } from "@verity/contracts";
 import { z } from "zod";
 import type { Config } from "./config";
 import { verifyChain } from "./log/chain";
@@ -12,6 +12,8 @@ import { openDb } from "./log/db";
 import { EventLog } from "./log/event-log";
 import type { SttProvider, TtsProvider } from "./providers/speech";
 import { SessionHub } from "./session/hub";
+import { mountMcp } from "./mcp/mount";
+import { listInterviews, readDossier } from "./mcp/read";
 import { LiveVoice, type LiveSink } from "./session/live";
 import { patchWavHeader } from "./session/recorder";
 import { newId, type Session, type SessionBrain } from "./session/session";
@@ -53,6 +55,19 @@ export async function buildApp(deps: AppDeps) {
     elevenlabs: !!config.elevenlabs.apiKey,
   }));
 
+  const createInterview = async (raw: Record<string, unknown>) => {
+    const input = CreateInput.parse(raw);
+    const id = newId("ses");
+    await log.createSession(id, { mode: input.mode, role: input.role, candidateName: input.candidateName });
+    const s = await hub.get(id);
+    await s.emit({
+      type: "SESSION_CREATED",
+      payload: { mode: input.mode, durationSec: input.durationSec, role: input.role, candidateName: input.candidateName },
+    });
+    await deps.onCreate?.(hub, id, input);
+    return id;
+  };
+
   app.post("/v1/sessions", async (req, reply) => {
     let raw: Record<string, unknown> = {};
     if (req.isMultipart()) {
@@ -69,41 +84,16 @@ export async function buildApp(deps: AppDeps) {
     } else {
       raw = (req.body as Record<string, unknown>) ?? {};
     }
-    const input = CreateInput.parse(raw);
-    const id = newId("ses");
-    await log.createSession(id, { mode: input.mode, role: input.role, candidateName: input.candidateName });
-    const s = await hub.get(id);
-    await s.emit({
-      type: "SESSION_CREATED",
-      payload: { mode: input.mode, durationSec: input.durationSec, role: input.role, candidateName: input.candidateName },
-    });
-    await deps.onCreate?.(hub, id, input);
+    const id = await createInterview(raw);
     return reply.code(201).send({ sessionId: id });
   });
 
-  app.get("/v1/sessions", async () => {
-    const rows = await log.listSessions();
-    return Promise.all(
-      rows.map(async (r) => {
-        const st = reduceAll(await log.read(r.id));
-        return {
-          id: r.id,
-          createdAt: r.createdAt,
-          mode: r.mode,
-          role: r.role,
-          candidateName: r.candidateName,
-          started: st.started,
-          ended: !!st.ended,
-          cases: st.caseOrder.map((cid) => st.cases[cid]!).map((c) => ({ id: c.id, label: c.label, status: c.status, belief: c.belief })),
-        };
-      }),
-    );
-  });
+  app.get("/v1/sessions", async () => listInterviews(log));
 
   app.get<{ Params: { id: string } }>("/v1/sessions/:id", async (req, reply) => {
-    const events = await log.read(req.params.id);
-    if (!events.length) return reply.code(404).send({ error: "not_found" });
-    return reduceAll(events);
+    const state = await readDossier(log, req.params.id);
+    if (!state) return reply.code(404).send({ error: "not_found" });
+    return state;
   });
 
   app.get<{ Params: { id: string }; Querystring: { after?: string } }>("/v1/sessions/:id/events", async (req) => {
@@ -213,6 +203,17 @@ export async function buildApp(deps: AppDeps) {
       }
     });
     socket.on("close", () => unsubscribe?.());
+  });
+
+  mountMcp(app, {
+    apiKey: config.mcpApiKey,
+    allowedOrigins: config.webOrigin,
+    api: {
+      origin: config.webOrigin[0] ?? "http://localhost:3000",
+      createInterview,
+      listInterviews: () => listInterviews(log),
+      readDossier: (id) => readDossier(log, id),
+    },
   });
 
   return { app, hub, log };
