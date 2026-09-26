@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { playCandidateClip } from "@/lib/clip-playback";
 import { reduceAll, type CaseStatus, type Receipt, type VerityEvent } from "@verity/contracts";
 import { BeliefRing } from "@/components/case/belief-ring";
 import { Panel, ReceiptCard, Transcript } from "@/components/board/panels";
@@ -21,16 +22,19 @@ export function Dossier({
   demo,
   practice,
   chain,
+  sessionId,
 }: {
   events: readonly VerityEvent[];
   demo?: boolean;
   practice?: boolean;
   chain?: { ok: boolean; count: number } | null;
+  sessionId?: string;
 }) {
   const full = useMemo(() => reduceAll(events), [events]);
   const end = events.at(-1)?.atMs ?? 0;
   const [t, setT] = useState(end);
   const [highlight, setHighlight] = useState<string | null>(null);
+  const [clipNote, setClipNote] = useState<string | null>(null);
   const atT = useMemo(() => reduceAll(events, t), [events, t]);
   const ended = !!full.ended;
   const cases = orderedCases(full);
@@ -42,7 +46,12 @@ export function Dossier({
   const play = (r: Receipt) => {
     setT(r.clip.endMs + 1200);
     setHighlight(r.quote);
+    setClipNote(null);
     document.getElementById("dossier-transcript")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    if (!sessionId || demo) return;
+    void playCandidateClip(sessionId, r.clip.startMs, r.clip.endMs).then((ok) => {
+      if (!ok) setClipNote("This session has no recorded answer to play.");
+    });
   };
 
   const deeper = asked.filter((c) => ["OPEN", "SETTLED_SURFACE"].includes(finalStatus(c, ended)));
@@ -94,6 +103,7 @@ export function Dossier({
             ))}
           </div>
         </div>
+        {clipNote && <p className="mt-2 text-[12.5px] text-muted">{clipNote}</p>}
         <div className="mt-3 flex flex-wrap gap-4">
           {orderedCases(atT).map((c) => (
             <div key={c.id} className="flex items-center gap-2">
