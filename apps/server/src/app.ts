@@ -1,3 +1,5 @@
+import { createReadStream, existsSync, statSync } from "node:fs";
+import { join } from "node:path";
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import websocket from "@fastify/websocket";
@@ -8,12 +10,16 @@ import type { Config } from "./config";
 import { verifyChain } from "./log/chain";
 import { openDb } from "./log/db";
 import { EventLog } from "./log/event-log";
+import type { SttProvider, TtsProvider } from "./providers/speech";
 import { SessionHub } from "./session/hub";
-import { newId, type SessionBrain } from "./session/session";
+import { LiveVoice, type LiveSink } from "./session/live";
+import { patchWavHeader } from "./session/recorder";
+import { newId, type Session, type SessionBrain } from "./session/session";
 
 export interface AppDeps {
   config: Config;
   brain?: SessionBrain | null;
+  speech?: { stt: SttProvider; tts: TtsProvider };
   /** Called after a session is created with its inputs (P1 extractor hooks in here). */
   onCreate?: (hub: SessionHub, sessionId: string, input: CreateInput) => Promise<void>;
 }
@@ -108,13 +114,50 @@ export async function buildApp(deps: AppDeps) {
     return verifyChain(await log.read(req.params.id));
   });
 
+  app.get<{ Params: { id: string; track: string } }>("/v1/sessions/:id/audio/:track", async (req, reply) => {
+    if (req.params.track !== "candidate" && req.params.track !== "verity") return reply.code(400).send({ error: "bad_track" });
+    const path = join(process.cwd(), "data", "audio", req.params.id, `${req.params.track}.wav`);
+    if (!existsSync(path)) return reply.code(404).send({ error: "no_audio" });
+    patchWavHeader(path);
+    const size = statSync(path).size;
+    reply.header("content-type", "audio/wav");
+    reply.header("accept-ranges", "bytes");
+    reply.header("cache-control", "no-store");
+
+    const range = req.headers.range;
+    if (!range) {
+      reply.header("content-length", size);
+      return reply.send(createReadStream(path));
+    }
+    const parsed = parseByteRange(range, size);
+    if (!parsed) {
+      reply.header("content-range", `bytes */${size}`);
+      return reply.code(416).send();
+    }
+    const { start, end } = parsed;
+    reply.code(206);
+    reply.header("content-range", `bytes ${start}-${end}/${size}`);
+    reply.header("content-length", end - start + 1);
+    return reply.send(createReadStream(path, { start, end }));
+  });
+
+  const voices = new Map<string, LiveVoice>();
+
   app.get<{ Params: { id: string } }>("/v1/session/:id", { websocket: true }, async (socket, req) => {
     const s = await hub.get(req.params.id);
     const send = (e: VerityEvent) => socket.readyState === 1 && socket.send(JSON.stringify(e));
+    const sink: LiveSink = {
+      json: (msg) => socket.readyState === 1 && socket.send(JSON.stringify(msg)),
+      pcm: (pcm) => socket.readyState === 1 && socket.send(Buffer.from(pcm)),
+    };
     let unsubscribe: (() => void) | null = null;
+    let textMode = true;
 
     socket.on("message", async (data, isBinary) => {
-      if (isBinary) return; // audio arrives in P3
+      if (isBinary) {
+        voices.get(s.id)?.write(asPcm(data));
+        return;
+      }
       let msg: ClientMessage;
       try {
         msg = ClientMessage.parse(JSON.parse(String(data)));
@@ -125,6 +168,7 @@ export async function buildApp(deps: AppDeps) {
       try {
         switch (msg.type) {
           case "HELLO": {
+            textMode = msg.textMode;
             const backlog = await log.read(s.id, msg.lastSeq ?? 0);
             let high = msg.lastSeq ?? 0;
             for (const e of backlog) {
@@ -142,13 +186,24 @@ export async function buildApp(deps: AppDeps) {
             break;
           }
           case "START":
-            await s.start(false);
+            if (!textMode) await ensureVoice(voices, deps, s, sink);
+            await s.start(textMode);
             break;
           case "TEXT_ANSWER":
             await s.textAnswer(msg.text);
             break;
+          case "VAD":
+            voices.get(s.id)?.vad(msg.speaking);
+            break;
+          case "PLAYBACK":
+            break;
+          case "OBSERVATION":
+            await s.emit({ type: "OBSERVATION", payload: { ...msg.observation, id: newId("obs") } });
+            break;
           case "END":
             await s.end("user");
+            await voices.get(s.id)?.close();
+            voices.delete(s.id);
             break;
           default:
             break;
@@ -161,6 +216,44 @@ export async function buildApp(deps: AppDeps) {
   });
 
   return { app, hub, log };
+}
+
+async function ensureVoice(voices: Map<string, LiveVoice>, deps: AppDeps, s: Session, sink: LiveSink) {
+  if (!deps.speech) return;
+  const existing = voices.get(s.id);
+  if (existing) {
+    existing.attach(sink);
+    return;
+  }
+  const voice = new LiveVoice(s, deps.speech.stt, deps.speech.tts, sink);
+  voices.set(s.id, voice);
+  await voice.open();
+}
+
+function asPcm(data: Buffer | ArrayBuffer | Buffer[]): Uint8Array {
+  if (Buffer.isBuffer(data)) return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+  if (data instanceof ArrayBuffer) return new Uint8Array(data);
+  return new Uint8Array(Buffer.concat(data));
+}
+
+function parseByteRange(header: string, size: number): { start: number; end: number } | null {
+  const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (!match || size <= 0) return null;
+  const [, rawStart, rawEnd] = match;
+  if (rawStart === "" && rawEnd === "") return null;
+  let start: number;
+  let end: number;
+  if (rawStart === "") {
+    const suffix = Number(rawEnd);
+    if (!Number.isFinite(suffix) || suffix <= 0) return null;
+    start = Math.max(0, size - suffix);
+    end = size - 1;
+  } else {
+    start = Number(rawStart);
+    end = rawEnd === "" ? size - 1 : Number(rawEnd);
+  }
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || start >= size || end < start) return null;
+  return { start, end: Math.min(end, size - 1) };
 }
 
 async function fileToText(filename: string | undefined, buf: Buffer): Promise<string> {

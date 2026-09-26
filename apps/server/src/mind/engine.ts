@@ -1,12 +1,22 @@
-import { isValidQuestionText, type Case, type Likelihood, type Skill } from "@verity/contracts";
+import { isValidQuestionText, type Belief, type Case, type Fact, type Likelihood, type Skill } from "@verity/contracts";
 import type { LlmProvider } from "../providers/llm/types";
+import { clipWindow } from "../session/clip-window";
 import { newId, type Session, type SessionBrain } from "../session/session";
-import { deriveStatus, guardLikelihood, prior, update } from "./belief";
+import { deriveStatus, ETA_PROVISIONAL, guardLikelihood, prior, update } from "./belief";
+import { suspectConflict } from "./ledger";
 import { CLOSING_TEXT, GREETING, plan, type CaseMemo } from "./policy";
+import { pickBranch } from "./speculate";
 import { ASSESSOR_V1, AssessmentOut, DRAFTER_V1, DraftOut, EXTRACTOR_V1, ExtractionOut } from "./prompts";
 
 const memos = new Map<string, Map<string, CaseMemo>>();
 const flags = new Map<string, { replyAsked: boolean; closingAsked: boolean }>();
+const turnBase = new Map<string, Belief>();
+const lastPreview = new Map<string, string>();
+const drafts = new Map<string, { caseId: string; kind: string; branch: "A" | "B"; text: string }>();
+
+function turnKey(sessionId: string, caseId: string) {
+  return `${sessionId}:${caseId}`;
+}
 
 function memoOf(sessionId: string, caseId: string): CaseMemo {
   let m = memos.get(sessionId);
@@ -97,6 +107,12 @@ export function createEngine(llm: LlmProvider | null): { brain: SessionBrain; on
         await assess(s, llm, c, q.kind, q.text, turn);
       }
       if (!s.state.ended) await askNext(s, llm);
+    },
+    async onPartial(s, text) {
+      await notePartial(s, text);
+    },
+    async onEarly(s, text) {
+      await noteEarly(s, llm, text);
     },
   };
 
@@ -195,9 +211,15 @@ async function askNext(s: Session, llm: LlmProvider | null) {
   if (s.state.activeCaseId !== c.id) {
     await s.emit({ type: "ACTIVE_CASE_CHANGED", payload: { caseId: c.id, why: d.why } });
   }
+  const stash = drafts.get(s.id);
+  drafts.delete(s.id);
+  let branch: "A" | "B" | "sync" | "fallback" = "sync";
   let text = d.kind === "opening" ? c.openingQuestion : d.kind === "closing" ? CLOSING_TEXT : "";
   const anchors: string[] = [];
-  if (d.kind !== "opening" && d.kind !== "closing" && llm) {
+  if (stash && stash.caseId === c.id && stash.kind === d.kind && isValidQuestionText(stash.text)) {
+    text = stash.text;
+    branch = stash.branch;
+  } else if (d.kind !== "opening" && d.kind !== "closing" && llm) {
     try {
       const drafted = await llm.generate({
         role: "drafter",
@@ -238,7 +260,7 @@ async function askNext(s: Session, llm: LlmProvider | null) {
       why: d.why,
       tiedPair: d.tiedPair,
       anchors,
-      branch: "sync",
+      branch,
       committedMs: s.now(),
     },
   });
@@ -253,6 +275,7 @@ async function assess(
   turn: { segmentIds: string[]; text: string; startMs: number; endMs: number },
 ) {
   let evidence: AssessmentOut["evidence"] = [];
+  let stated: AssessmentOut["facts"] = [];
   if (llm) {
     try {
       const r = await llm.generate({
@@ -270,6 +293,7 @@ async function assess(
         temperature: 0.1,
       });
       evidence = r.data.evidence;
+      stated = r.data.facts;
     } catch {
       evidence = [];
     }
@@ -277,7 +301,10 @@ async function assess(
   const usable = evidence.filter((e) => e.quote && turn.text.includes(e.quote));
   const items = usable.length ? usable : [heuristicEvidence(turn.text)];
 
-  let belief = c.belief;
+  const origin = turnBase.get(turnKey(s.id, c.id)) ?? c.belief;
+  turnBase.delete(turnKey(s.id, c.id));
+  lastPreview.delete(turnKey(s.id, c.id));
+  let belief = origin;
   const ids: string[] = [];
   for (const item of items.slice(0, 3)) {
     const quote = turn.text.includes(item.quote) ? item.quote : turn.text.slice(0, 180);
@@ -289,6 +316,9 @@ async function assess(
     ids.push(id);
     const span = Math.max(1, turn.endMs - turn.startMs);
     const at = Math.max(0, turn.text.indexOf(quote));
+    const quoteStart = turn.startMs + Math.round((at / Math.max(turn.text.length, 1)) * span);
+    const quoteEnd = turn.startMs + Math.round(((at + quote.length) / Math.max(turn.text.length, 1)) * span);
+    const sessionEdge = (s.state.meta?.durationSec ?? 900) * 1000;
     await s.emit({
       type: "RECEIPT_CREATED",
       payload: {
@@ -297,10 +327,7 @@ async function assess(
         questionId: s.state.questionOrder.at(-1) ?? "q_unknown",
         segmentIds: turn.segmentIds,
         quote,
-        clip: {
-          startMs: turn.startMs + Math.round((at / turn.text.length) * span),
-          endMs: turn.startMs + Math.round(((at + quote.length) / turn.text.length) * span),
-        },
+        clip: clipWindow(quoteStart, quoteEnd, sessionEdge),
         type: item.type,
         likelihood,
         rationale: item.rationale,
@@ -311,12 +338,49 @@ async function assess(
   }
   const m = memoOf(s.id, c.id);
   m.lastEvidence = items[0]!.type;
+  const known = s.state.facts.filter((f) => f.caseId === c.id);
+  const incoming = [
+    ...stated
+      .filter((f) => f.quote && turn.text.includes(f.quote))
+      .map((f) => ({ entity: f.entity, attribute: f.attribute, value: f.value, unit: f.unit, quote: f.quote })),
+    ...heuristicFacts(turn.text, c.label),
+  ];
+  let freshSuspicion = false;
+  for (const raw of incoming) {
+    const fact: Fact = {
+      id: newId("fact"),
+      caseId: c.id,
+      entity: raw.entity,
+      attribute: raw.attribute,
+      value: raw.value,
+      unit: raw.unit,
+      quote: raw.quote,
+      atMs: turn.endMs,
+    };
+    const hit = suspectConflict(known, fact);
+    await s.emit({ type: "FACT_RECORDED", payload: fact });
+    known.push(fact);
+    if (hit && !m.conflictSuspected) {
+      freshSuspicion = true;
+      m.conflictSuspected = true;
+      await s.emit({ type: "CONFLICT_SUSPECTED", payload: { caseId: c.id, factIds: hit.factIds, note: hit.note } });
+    }
+  }
+  if (kind === "reconcile") {
+    m.conflictSuspected = false;
+    const receiptIds = (s.state.cases[c.id]?.receiptIds ?? ids).slice(-2);
+    if (items[0]!.type === "non_answer" || freshSuspicion) {
+      if (receiptIds.length >= 2) await s.emit({ type: "CONFLICT_CONFIRMED", payload: { caseId: c.id, receiptIds: [receiptIds[0]!, receiptIds[1]!] } });
+    } else {
+      await s.emit({ type: "CONFLICT_RESOLVED", payload: { caseId: c.id, receiptIds: ids } });
+    }
+  }
   const latest = s.state.cases[c.id] ?? c;
   await s.emit({
     type: "BELIEF_UPDATED",
     payload: {
       caseId: c.id,
-      before: c.belief,
+      before: origin,
       after: belief,
       provisional: false,
       status: deriveStatus(belief, {
@@ -329,6 +393,95 @@ async function assess(
       reason: items[0]!.rationale,
     },
   });
+}
+
+function activeQuestion(s: Session) {
+  const qid = [...s.state.questionOrder].reverse().find((id) => s.state.questions[id]?.caseId !== "case_meta");
+  const q = qid ? s.state.questions[qid] : undefined;
+  const c = q ? s.state.cases[q.caseId] : undefined;
+  return q && c ? { q, c } : null;
+}
+
+/** Provisional ring move from the pre-turn belief. No receipt. Buzzwords and "I don't remember" do not move it. */
+async function notePartial(s: Session, text: string) {
+  const found = activeQuestion(s);
+  if (!found || found.q.kind === "closing") return;
+  const { c } = found;
+  const key = turnKey(s.id, c.id);
+  if (!c.provisional || !turnBase.has(key)) turnBase.set(key, c.provisional ? (turnBase.get(key) ?? c.belief) : c.belief);
+  const base = turnBase.get(key) ?? c.belief;
+  const ev = heuristicEvidence(text);
+  if (ev.type === "vague" || ev.type === "non_answer") return;
+  if (!/\b(i|we)\b/i.test(text)) return;
+  if (lastPreview.get(key) === ev.type) return;
+  lastPreview.set(key, ev.type);
+  const after = update(base, guardLikelihood(ev.type, ev.likelihood as Likelihood), ETA_PROVISIONAL);
+  const m = memoOf(s.id, c.id);
+  await s.emit({
+    type: "BELIEF_UPDATED",
+    payload: {
+      caseId: c.id,
+      before: base,
+      after,
+      provisional: true,
+      status: deriveStatus(after, { probes: c.probes, probeBudget: c.probeBudget, scaffoldAsked: m.scaffoldAsked, asked: true }),
+      receiptIds: [],
+      reason: ev.rationale,
+    },
+  });
+}
+
+/** Draft the likely next question while the candidate is still talking. Nothing is spoken here. */
+async function noteEarly(s: Session, llm: LlmProvider | null, text: string) {
+  const found = activeQuestion(s);
+  if (!found) return;
+  const { c } = found;
+  const base = turnBase.get(turnKey(s.id, c.id)) ?? c.belief;
+  const ev = heuristicEvidence(text);
+  const moved = ev.type !== "vague" && ev.type !== "non_answer" && /\b(i|we)\b/i.test(text);
+  const after = moved ? update(base, guardLikelihood(ev.type, ev.likelihood as Likelihood), ETA_PROVISIONAL) : base;
+  const shadow = { ...s.state, cases: { ...s.state.cases, [c.id]: { ...c, belief: after } } };
+  const decision = plan(shadow, memos.get(s.id) ?? new Map(), s.now(), flags.get(s.id) ?? { replyAsked: false, closingAsked: false });
+  if (!decision || !("caseId" in decision)) return;
+  const target = s.state.cases[decision.caseId] ?? c;
+  let drafted = fallbackQuestion(target.label, decision.kind);
+  if (llm && decision.kind !== "opening" && decision.kind !== "closing") {
+    try {
+      const r = await llm.generate({
+        role: "drafter",
+        name: DRAFTER_V1.name,
+        system: DRAFTER_V1.system,
+        prompt: DRAFTER_V1.user({
+          claim: target.claim,
+          kind: decision.kind,
+          tied: decision.tiedPair?.join(" vs "),
+          belief: `owned ${after.owned.toFixed(2)}, contributed ${after.contributed.toFixed(2)}, surface ${after.surface.toFixed(2)}`,
+          receipts: target.receiptIds.map((id) => s.state.receipts[id]?.quote).filter(Boolean) as string[],
+          asked: target.questionIds.map((id) => s.state.questions[id]?.text).filter(Boolean) as string[],
+        }),
+        schema: DraftOut,
+        temperature: 0.4,
+      });
+      if (isValidQuestionText(r.data.text)) drafted = r.data.text;
+    } catch {
+      drafted = fallbackQuestion(target.label, decision.kind);
+    }
+  }
+  drafts.set(s.id, { caseId: decision.caseId, kind: decision.kind, branch: pickBranch(base, after), text: drafted });
+}
+
+function heuristicFacts(answer: string, label: string) {
+  const m = answer.match(/(\d[\d,]*(?:\.\d+)?)(\s*)(k|ms|s|%|thousand)\b/i);
+  if (!m?.[0] || !m[1] || !m[3] || !answer.includes(m[0])) return [];
+  return [
+    {
+      entity: label.slice(0, 48),
+      attribute: "stated figure",
+      value: m[1].replace(/,/g, ""),
+      unit: m[3].toLowerCase(),
+      quote: m[0],
+    },
+  ];
 }
 
 function heuristicEvidence(answer: string): AssessmentOut["evidence"][number] {

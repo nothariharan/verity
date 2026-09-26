@@ -6,6 +6,7 @@ import { InterviewRoom } from "@/components/room/interview-room";
 import { Button, Logo } from "@/components/ui/primitives";
 import { DEMO_EVENTS } from "@/lib/fixtures/demo";
 import { demoLevel } from "@/lib/demo-level";
+import { useRoomVoice } from "@/lib/room-voice";
 import { useLiveSession, useReplay } from "@/lib/session";
 
 export function CandidateInterview({ id }: { id: string }) {
@@ -31,7 +32,8 @@ function DemoInterview() {
 }
 
 function RealInterview({ id }: { id: string }) {
-  const { state, status, send } = useLiveSession(id, { textMode: true });
+  const { state, status, send, sendBinary, onPcm, onControl } = useLiveSession(id, { textMode: false });
+  const voice = useRoomVoice({ enabled: status === "open", state, send, sendBinary, onPcm, onControl });
   useEffect(() => {
     if (status === "open" && !state.started) send({ type: "START" });
   }, [status, state.started, send]);
@@ -42,9 +44,10 @@ function RealInterview({ id }: { id: string }) {
       t={state.atMs}
       viewer={viewer}
       standalone
-      connection={status === "open" ? undefined : status}
+      level={voice.level}
+      connection={voice.micError ?? (status === "open" ? undefined : status)}
       onAnswer={(text) => send({ type: "TEXT_ANSWER", text })}
-      controls={{ onEnd: () => send({ type: "END" }) }}
+      controls={{ muted: voice.muted, onMute: voice.toggleMute, onEnd: () => send({ type: "END" }) }}
       onEnd={() => send({ type: "END" })}
     />
   );

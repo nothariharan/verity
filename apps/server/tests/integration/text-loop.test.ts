@@ -64,4 +64,41 @@ describe("text interview loop", () => {
     const receipt = events.find((e) => e.type === "RECEIPT_CREATED");
     expect(String((receipt!.payload as { quote: string }).quote).length).toBeGreaterThan(10);
   });
+
+  it("asks a reconcile question after two stated figures disagree, and does not flag a conflict yet", async () => {
+    const created = await fetch(`http://${base}/v1/sessions`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        role: "ML Engineer",
+        durationSec: 900,
+        resumeText: "Designed the ingest pipeline that sustained 50k events per second.",
+      }),
+    });
+    const { sessionId } = (await created.json()) as { sessionId: string };
+    const ws = new WebSocket(`ws://${base}/v1/session/${sessionId}`);
+    const events: { type: string; payload: Record<string, unknown> }[] = [];
+    await new Promise<void>((r) => ws.addEventListener("open", () => r()));
+    const until = (pred: () => boolean) =>
+      new Promise<void>((resolve) => {
+        const check = () => {
+          if (pred()) resolve();
+        };
+        ws.addEventListener("message", (m) => {
+          const msg = JSON.parse(String(m.data));
+          if (typeof msg.seq === "number") events.push(msg);
+          check();
+        });
+        check();
+      });
+    ws.send(JSON.stringify({ type: "HELLO", textMode: true }));
+    ws.send(JSON.stringify({ type: "START" }));
+    await until(() => events.filter((e) => e.type === "QUESTION_COMMITTED").length >= 2);
+    ws.send(JSON.stringify({ type: "TEXT_ANSWER", text: "The pipeline held at 50k events per second during the launch." }));
+    await until(() => events.some((e) => e.type === "QUESTION_COMMITTED" && events.filter((x) => x.type === "QUESTION_COMMITTED").length >= 3));
+    ws.send(JSON.stringify({ type: "TEXT_ANSWER", text: "Looking back, the steady rate was 5k events per second." }));
+    await until(() => events.some((e) => e.type === "QUESTION_COMMITTED" && e.payload.kind === "reconcile"));
+    expect(events.some((e) => e.type === "CONFLICT_CONFIRMED")).toBe(false);
+    ws.close();
+  });
 });

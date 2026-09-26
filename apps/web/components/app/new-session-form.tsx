@@ -90,9 +90,6 @@ export function NewSessionForm({ mode }: { mode: "recruiter" | "practice" }) {
           <Button type="submit" disabled={busy} arrow>
             {busy ? "Preparing cases…" : mode === "practice" ? "Start practice" : "Create interview"}
           </Button>
-          <Button href={mode === "practice" ? "/interview/demo" : "/app/live/demo"} variant="ghost">
-            Use demo candidate
-          </Button>
         </div>
       </div>
       <aside className="card h-fit space-y-4 p-6 text-[13px] leading-relaxed text-ink-2">
@@ -101,7 +98,7 @@ export function NewSessionForm({ mode }: { mode: "recruiter" | "practice" }) {
         <Step n={2}>
           {mode === "practice"
             ? "You answer out loud. Verity asks the question that best separates what's still unclear."
-            : "The candidate answers out loud. You can watch every case resolve on the live board."}
+            : "You get a link to send the candidate. They answer out loud. You watch every case on the live board."}
         </Step>
         <Step n={3}>Every change in belief leaves a receipt: the quote, the clip, and why it moved.</Step>
       </aside>

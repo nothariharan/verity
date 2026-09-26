@@ -18,15 +18,26 @@ export type LlmRole = "extractor" | "assessor" | "live" | "drafter" | "summary";
 
 const nonEmpty = (v: string | undefined) => (v && v.trim() ? v.trim() : undefined);
 
+/** `luna` is not a model id. The working fallback is gpt-6-luna. */
+function openaiModel(value: string | undefined) {
+  const model = nonEmpty(value);
+  if (!model || model === "luna") return "gpt-6-luna";
+  return model;
+}
+
+function hasAnyKey(env: NodeJS.ProcessEnv) {
+  return !!(nonEmpty(env.GEMINI_API_KEY) || nonEmpty(env.OPENAI_API_KEY) || nonEmpty(env.ELEVENLABS_API_KEY));
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   return {
     port: Number(env.PORT ?? 8787),
     databaseUrl: env.DATABASE_URL ?? "file:./data/verity.db",
-    providers: env.PROVIDERS === "real" ? "real" : "fake",
+    providers: env.PROVIDERS === "fake" ? "fake" : env.PROVIDERS === "real" || hasAnyKey(env) ? "real" : "fake",
     llm: {
       timeoutMs: Number(env.LLM_TIMEOUT_MS ?? 8000),
       gemini: { apiKey: nonEmpty(env.GEMINI_API_KEY), model: env.GEMINI_MODEL ?? "gemini-3.5-flash-lite" },
-      openai: { apiKey: nonEmpty(env.OPENAI_API_KEY), model: env.OPENAI_MODEL ?? "gpt-6-luna" },
+      openai: { apiKey: nonEmpty(env.OPENAI_API_KEY), model: openaiModel(env.OPENAI_MODEL) },
       roleModels: {
         extractor: nonEmpty(env.MODEL_EXTRACTOR),
         assessor: nonEmpty(env.MODEL_ASSESSOR),

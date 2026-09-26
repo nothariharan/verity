@@ -27,5 +27,5 @@ export function DossierLoader({ id, practice }: { id: string; practice?: boolean
 
   if (error) return <p className="p-10 text-[14px] text-muted">{error}</p>;
   if (!events) return <p className="p-10 text-[14px] text-muted">Loading dossier…</p>;
-  return <Dossier events={events} demo={demo} practice={practice} chain={chain} />;
+  return <Dossier events={events} demo={demo} practice={practice} chain={chain} sessionId={demo ? undefined : id} />;
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { emptyState, reduce, reduceAll, type ClientMessage, type SessionState, type VerityEvent } from "@verity/contracts";
+import { emptyState, reduce, reduceAll, type ClientMessage, type ControlMessage, type SessionState, type VerityEvent } from "@verity/contracts";
 
 export const SERVER_URL = process.env.NEXT_PUBLIC_SERVER_URL ?? "http://localhost:8787";
 
@@ -50,6 +50,8 @@ export function useLiveSession(sessionId: string | null, opts: { textMode?: bool
   const stateRef = useRef(state);
   const wsRef = useRef<WebSocket | null>(null);
   const events = useRef<VerityEvent[]>([]);
+  const pcmRef = useRef<(pcm: ArrayBuffer) => void>(() => {});
+  const controlRef = useRef<(msg: ControlMessage) => void>(() => {});
   const textMode = opts.textMode ?? true;
 
   useEffect(() => {
@@ -61,14 +63,23 @@ export function useLiveSession(sessionId: string | null, opts: { textMode?: bool
     const connect = () => {
       setStatus("connecting");
       const ws = new WebSocket(`${SERVER_URL.replace(/^http/, "ws")}/v1/session/${sessionId}`);
+      ws.binaryType = "arraybuffer";
       wsRef.current = ws;
       ws.onopen = () => {
         retry = 0;
         ws.send(JSON.stringify({ type: "HELLO", lastSeq: stateRef.current.lastSeq, textMode } satisfies ClientMessage));
       };
       ws.onmessage = (m) => {
+        if (m.data instanceof ArrayBuffer) {
+          pcmRef.current(m.data);
+          return;
+        }
         if (typeof m.data !== "string") return;
         const msg = JSON.parse(m.data);
+        if (msg.type === "TTS_BEGIN" || msg.type === "TTS_END" || msg.type === "YIELD" || msg.type === "ACK") {
+          controlRef.current(msg as ControlMessage);
+          return;
+        }
         if (msg.type === "READY") return setStatus("open");
         if (typeof msg.seq === "number") {
           events.current.push(msg as VerityEvent);
@@ -97,7 +108,24 @@ export function useLiveSession(sessionId: string | null, opts: { textMode?: bool
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
   }, []);
 
-  return { state, status, send, events: events.current };
+  const sendBinary = useCallback((pcm: Uint8Array) => {
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(pcm);
+  }, []);
+
+  return {
+    state,
+    status,
+    send,
+    sendBinary,
+    events: events.current,
+    onPcm: (fn: (pcm: ArrayBuffer) => void) => {
+      pcmRef.current = fn;
+    },
+    onControl: (fn: (msg: ControlMessage) => void) => {
+      controlRef.current = fn;
+    },
+  };
 }
 
 /** Cases in deterministic board order: importance desc, then id. Max 12. */
