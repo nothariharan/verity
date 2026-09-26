@@ -1,13 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { InterviewRoom } from "@/components/room/interview-room";
 import { Button, Logo } from "@/components/ui/primitives";
 import { DEMO_EVENTS } from "@/lib/fixtures/demo";
 import { demoLevel } from "@/lib/demo-level";
+import { primeMic } from "@/lib/audio/mic";
+import { primePlayback } from "@/lib/audio/player";
+import { startCamera, type CameraHandle } from "@/lib/integrity/camera";
 import { useRoomVoice } from "@/lib/room-voice";
-import { useLiveSession, useReplay } from "@/lib/session";
+import { useLiveSession, useReplay, useSessionClock } from "@/lib/session";
 
 export function CandidateInterview({ id }: { id: string }) {
   const [consented, setConsented] = useState(false);
@@ -33,24 +36,93 @@ function DemoInterview() {
 
 function RealInterview({ id }: { id: string }) {
   const { state, status, send, sendBinary, onPcm, onControl } = useLiveSession(id, { textMode: false });
+  const clock = useSessionClock(state);
   const voice = useRoomVoice({ enabled: status === "open", state, send, sendBinary, onPcm, onControl });
+  const camera = useOptionalCamera(status === "open", send, state.questionOrder.at(-1), clock);
   useEffect(() => {
     if (status === "open" && !state.started) send({ type: "START" });
   }, [status, state.started, send]);
   const viewer = state.meta?.mode === "practice" ? "practice" : "candidate";
   return (
-    <InterviewRoom
-      s={state}
-      t={state.atMs}
-      viewer={viewer}
-      standalone
-      level={voice.level}
-      connection={voice.micError ?? (status === "open" ? undefined : status)}
-      onAnswer={(text) => send({ type: "TEXT_ANSWER", text })}
-      controls={{ muted: voice.muted, onMute: voice.toggleMute, onEnd: () => send({ type: "END" }) }}
-      onEnd={() => send({ type: "END" })}
-    />
+    <>
+      <video
+        ref={camera.videoRef}
+        playsInline
+        muted
+        className={camera.on ? "fixed bottom-4 right-4 z-20 h-28 w-40 rounded-2xl bg-ink object-cover shadow-[var(--shadow-card)]" : "hidden"}
+      />
+      <InterviewRoom
+        s={state}
+        t={clock}
+        viewer={viewer}
+        standalone
+        level={voice.level}
+        connection={voice.micError ?? camera.error ?? (status === "open" ? undefined : status)}
+        onAnswer={(text) => send({ type: "TEXT_ANSWER", text })}
+        controls={{
+          muted: voice.muted,
+          onMute: voice.toggleMute,
+          onEnd: () => send({ type: "END" }),
+          cameraOn: camera.on,
+          onCamera: camera.toggle,
+        }}
+        onEnd={() => send({ type: "END" })}
+      />
+    </>
   );
+}
+
+function useOptionalCamera(
+  enabled: boolean,
+  send: (msg: { type: "OBSERVATION"; observation: { kind: "GAZE_AWAY" | "EXTRA_FACE" | "CAMERA_OFF"; startMs: number; detail: string; duringQuestionId?: string } }) => void,
+  questionId: string | undefined,
+  clock: number,
+) {
+  const [on, setOn] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const questionRef = useRef(questionId);
+  const clockRef = useRef(clock);
+  questionRef.current = questionId;
+  clockRef.current = clock;
+
+  useEffect(() => {
+    if (!enabled || !on || !videoRef.current) return;
+    let handle: CameraHandle | null = null;
+    let cancelled = false;
+    setError(null);
+    void startCamera(
+      videoRef.current,
+      (obs) => {
+        send({
+          type: "OBSERVATION",
+          observation: { ...obs, duringQuestionId: questionRef.current },
+        });
+      },
+      () => clockRef.current,
+    )
+      .then((next) => {
+        if (cancelled) next.stop();
+        else handle = next;
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setError("Camera is unavailable. The interview continues without it.");
+          setOn(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+      handle?.stop();
+    };
+  }, [enabled, on, send]);
+
+  return {
+    on,
+    error,
+    videoRef,
+    toggle: () => setOn((value) => !value),
+  };
 }
 
 function Consent({ onStart, demo }: { onStart: () => void; demo: boolean }) {
@@ -74,7 +146,14 @@ function Consent({ onStart, demo }: { onStart: () => void; demo: boolean }) {
             <Item title="Fair by design">Forgetting a detail is fine; it isn&apos;t treated as misrepresentation. Tone, accent, and pace are never assessed.</Item>
           </ul>
           <div className="mt-8 flex items-center gap-3">
-            <Button onClick={onStart} arrow>
+            <Button
+              onClick={() => {
+                primeMic();
+                primePlayback();
+                onStart();
+              }}
+              arrow
+            >
               {demo ? "Watch the demo interview" : "I understand, start"}
             </Button>
             <Button href="/" variant="ghost">

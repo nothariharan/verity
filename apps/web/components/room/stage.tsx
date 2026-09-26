@@ -10,6 +10,8 @@ export interface StageControls {
   onEnd?: () => void;
   onType?: () => void;
   typing?: boolean;
+  cameraOn?: boolean;
+  onCamera?: () => void;
 }
 
 const ORB_COLOR = { verity: "#F08A4B", candidate: "#E9965F", listening: "#F2A56E", idle: "#F2B084" };
@@ -26,7 +28,7 @@ const STATUS = { verity: "Speaking", candidate: "Hearing you", listening: "Liste
 /** Question up top, the FluidOrb in the middle with a level-driven waveform, controls below. */
 export function Stage({ s, level = 0, controls }: { s: SessionState; level?: number; controls?: StageControls }) {
   const mode = orbMode(s);
-  const q = s.questionOrder.length ? s.questions[s.questionOrder.at(-1)!] : null;
+  const q = visibleQuestion(s);
   const [lead, rest] = splitQuestion(q?.text ?? "");
   const l = Math.max(0, Math.min(1, level));
   const size = 232;
@@ -78,6 +80,12 @@ export function Stage({ s, level = 0, controls }: { s: SessionState; level?: num
       </div>
 
       <div className="relative flex items-start gap-10">
+        <Control label={controls?.cameraOn ? "Camera on" : "Camera"} onClick={controls?.onCamera} disabled={!controls?.onCamera}>
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round">
+            <path d="M2.2 4.2h7.2v7.6H2.2z" />
+            <path d="M9.4 7.1l4.4-2.1v6l-4.4-2.1z" />
+          </svg>
+        </Control>
         <Control label={controls?.muted ? "Unmute" : "Mute"} onClick={controls?.onMute} disabled={!controls?.onMute}>
           <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
             <rect x="5.8" y="1.8" width="4.4" height="8" rx="2.2" />
@@ -97,6 +105,14 @@ export function Stage({ s, level = 0, controls }: { s: SessionState; level?: num
       <p className="relative mt-3 text-[11.5px] text-muted">You can interrupt anytime.</p>
     </section>
   );
+}
+
+/** The line being spoken, or the next one that has not started, so the greeting is not replaced by the question early. */
+function visibleQuestion(s: SessionState) {
+  if (s.speakingQuestionId) return s.questions[s.speakingQuestionId] ?? null;
+  const pending = s.questionOrder.find((id) => s.questions[id]?.spokenStartMs == null);
+  const id = pending ?? s.questionOrder.at(-1);
+  return id ? s.questions[id] ?? null : null;
 }
 
 function splitQuestion(text: string): [string, string] {

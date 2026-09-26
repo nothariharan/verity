@@ -7,7 +7,7 @@ import { CandidateLink } from "@/components/room/candidate-link";
 import { DEMO_EVENTS } from "@/lib/fixtures/demo";
 import { playCandidateClip } from "@/lib/clip-playback";
 import { demoLevel } from "@/lib/demo-level";
-import { useLiveSession, useReplay } from "@/lib/session";
+import { useLiveSession, useReplay, useSessionClock } from "@/lib/session";
 
 export function LiveView({ id, invite = false }: { id: string; invite?: boolean }) {
   return id.startsWith("demo") ? <DemoLive /> : <RealLive id={id} invite={invite} />;
@@ -20,6 +20,7 @@ function DemoLive() {
 
 function RealLive({ id, invite }: { id: string; invite: boolean }) {
   const { state, status, send } = useLiveSession(id, { textMode: true });
+  const clock = useSessionClock(state);
   const [clipNote, setClipNote] = useState<string | null>(null);
   const onPlay = (r: Receipt) => {
     setClipNote(null);
@@ -30,7 +31,7 @@ function RealLive({ id, invite }: { id: string; invite: boolean }) {
   return (
     <InterviewRoom
       s={state}
-      t={state.atMs}
+      t={clock}
       viewer="team"
       connection={status === "open" ? "connected" : status}
       onEnd={() => send({ type: "END" })}

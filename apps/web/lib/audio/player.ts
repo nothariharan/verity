@@ -15,6 +15,11 @@ let epoch = 0;
 let ended: (() => void) | null = null;
 const active = new Set<AudioBufferSourceNode>();
 
+/** Call from the consent click so the first spoken line is allowed to play. */
+export function primePlayback(): void {
+  ensure();
+}
+
 /** Register the callback fired once the queue finishes on its own. */
 export function onEnded(cb: () => void): void {
   ended = cb;

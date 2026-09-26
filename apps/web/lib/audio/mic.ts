@@ -37,6 +37,14 @@ export type MicHandle = {
 let epoch = 0;
 let level = 0;
 let releaseCurrent: (() => void) | null = null;
+let sharedCtx: AudioContext | null = null;
+
+/** Call from the consent click so the mic context is allowed to run. */
+export function primeMic(): void {
+  if (typeof window === "undefined") return;
+  if (!sharedCtx || sharedCtx.state === "closed") sharedCtx = new AudioContext();
+  void sharedCtx.resume();
+}
 
 /** RMS the orb can poll while the mic is open. */
 export function getMicLevel(): number {
@@ -69,7 +77,8 @@ export async function startMic(onFrame: MicFrameHandler): Promise<MicHandle> {
     return inertHandle();
   }
 
-  const ctx = new AudioContext();
+  const ctx = sharedCtx && sharedCtx.state !== "closed" ? sharedCtx : new AudioContext();
+  sharedCtx = ctx;
   if (ctx.state === "suspended") await ctx.resume();
 
   if (myEpoch !== epoch) {

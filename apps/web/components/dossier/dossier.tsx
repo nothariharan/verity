@@ -2,11 +2,11 @@
 
 import { useMemo, useState } from "react";
 import { playCandidateClip } from "@/lib/clip-playback";
-import { depthShown, reduceAll, roleCoverage, type CaseStatus, type Receipt, type VerityEvent } from "@verity/contracts";
+import { depthShown, reduceAll, roleCoverage, type Belief, type CaseStatus, type Observation, type Receipt, type VerityEvent } from "@verity/contracts";
 import { BeliefRing } from "@/components/case/belief-ring";
 import { Panel, ReceiptCard, Transcript } from "@/components/board/panels";
 import { DemoBadge, Pill } from "@/components/ui/primitives";
-import { HYP_BLURB, STATUS_COLOR, STATUS_LABEL } from "@/lib/hypotheses";
+import { HYP_BLURB, HYP_LABEL, leading, STATUS_COLOR, STATUS_LABEL } from "@/lib/hypotheses";
 import { finalStatus, orderedCases } from "@/lib/session";
 import { cn, formatClock } from "@/lib/utils";
 
@@ -82,7 +82,7 @@ export function Dossier({
         </div>
       </header>
 
-      <p className="text-[12.5px] text-muted">No overall score. Each claim is resolved on its own evidence, and every change links to a receipt below.</p>
+      <p className="text-[12.5px] text-muted">No overall score. Owned, Contributed, and Surface count claims that closed. Open counts claims that were asked and did not close. Every change links to a receipt below.</p>
 
       {coverage.length > 0 && (
         <Panel title="Role coverage">
@@ -136,7 +136,7 @@ export function Dossier({
             {deeper.map((c) => (
               <li key={c.id} className="rounded-xl border border-line p-4">
                 <p className="text-[14px] font-medium">{c.label}</p>
-                <p className="mt-1 text-[12.5px] text-muted">{HYP_BLURB[finalStatus(c, ended) === "OPEN" ? "open" : "surface"]}</p>
+                <p className="mt-1 text-[12.5px] text-muted">{reading(finalStatus(c, ended), c.belief)}</p>
                 <p className="mt-3 text-[13px] text-ink-2">Prepare for: “{full.questions[c.questionIds.at(-1)!]?.text ?? c.openingQuestion}”</p>
               </li>
             ))}
@@ -160,7 +160,7 @@ export function Dossier({
                   <div className="min-w-0 flex-1">
                     <h3 className="text-[18px] font-semibold tracking-[-0.02em]">{c.label}</h3>
                     <p className="mt-1 text-[13px] text-muted">Resume: “{c.claim}”</p>
-                    <p className="mt-2 text-[12.5px] text-ink-2">{HYP_BLURB[st === "SETTLED_OWNED" ? "owned" : st === "SETTLED_CONTRIBUTED" ? "contributed" : st === "SETTLED_SURFACE" ? "surface" : "open"]}</p>
+                    <p className="mt-2 text-[12.5px] text-ink-2">{reading(st, c.belief)}</p>
                     <p className="mt-1 text-[12px] text-muted">Depth shown in this interview: {depthShown(c, full.questions, full.receipts)}</p>
                     <ol className="mt-4 space-y-1.5 border-l border-line pl-4">
                       {c.questionIds.map((qid) => {
@@ -217,10 +217,13 @@ export function Dossier({
               <p className="text-[13px] text-muted">None recorded.</p>
             ) : (
               <ul className="space-y-2">
-                {full.observations.map((o) => (
+                {collapsedObservations(full.observations).map((o) => (
                   <li key={o.id} className="flex gap-3 text-[13px]">
                     <span className="font-mono text-[11px] text-muted">{formatClock(o.startMs)}</span>
-                    {o.detail}
+                    <span>
+                      {o.detail}
+                      {o.extra > 0 && <span className="text-muted"> · noted {o.extra + 1} times</span>}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -231,6 +234,29 @@ export function Dossier({
       </div>
     </div>
   );
+}
+
+function reading(st: CaseStatus, belief: Belief): string {
+  if (st === "OPEN" || st === "INVESTIGATING") {
+    return `${HYP_LABEL[leading(belief)]} is ahead, and the case stayed open because no explanation reached a clear lead. Worth a follow-up.`;
+  }
+  if (st === "SETTLED_OWNED") return HYP_BLURB.owned;
+  if (st === "SETTLED_CONTRIBUTED") return HYP_BLURB.contributed;
+  if (st === "SETTLED_SURFACE") return HYP_BLURB.surface;
+  return HYP_BLURB.open;
+}
+
+function collapsedObservations(observations: Observation[]): (Observation & { extra: number })[] {
+  const out: (Observation & { extra: number })[] = [];
+  for (const o of observations) {
+    const prev = out.at(-1);
+    if (prev && prev.detail === o.detail && o.startMs - prev.startMs < 45_000) {
+      prev.extra += 1;
+      continue;
+    }
+    out.push({ ...o, extra: 0 });
+  }
+  return out;
 }
 
 function ChainChip({ demo, chain, events }: { demo?: boolean; chain?: { ok: boolean; count: number; brokenAtSeq?: number } | null; events: number }) {

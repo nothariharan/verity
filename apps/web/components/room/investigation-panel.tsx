@@ -79,6 +79,15 @@ export function InvestigationPanel({ s }: { s: SessionState }) {
               </span>
             </div>
             {q?.why && <p className="mt-2 text-[12.5px] leading-relaxed text-ink-2">{q.why}</p>}
+            {s.observations.length > 0 && (
+              <ul className="mt-3 space-y-1 border-t border-line pt-2">
+                {s.observations.slice(-3).map((obs) => (
+                  <li key={obs.id} className="text-[11.5px] leading-snug text-muted">
+                    {obs.detail}
+                  </li>
+                ))}
+              </ul>
+            )}
             {q?.tiedPair && (
               <p className="mt-2 text-[11.5px] text-muted">
                 Separating {HYP_LABEL[q.tiedPair[0]]} from {HYP_LABEL[q.tiedPair[1]]}

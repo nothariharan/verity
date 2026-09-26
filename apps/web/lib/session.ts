@@ -41,6 +41,23 @@ export function useReplay(events: readonly VerityEvent[], opts: { speed?: number
   return { state, t, end, playing, setPlaying, seek: setT };
 }
 
+/** Wall clock for a live interview. Event time alone freezes between turns. */
+export function useSessionClock(s: SessionState): number {
+  const [tick, setTick] = useState(s.atMs);
+  const origin = useRef(0);
+  useEffect(() => {
+    if (!s.started || s.ended) return;
+    origin.current = performance.now() - s.atMs;
+    const id = window.setInterval(() => {
+      setTick(Math.max(0, Math.round(performance.now() - origin.current)));
+    }, 250);
+    return () => window.clearInterval(id);
+  }, [s.started, s.ended, s.atMs]);
+  if (!s.started) return 0;
+  if (s.ended) return s.atMs;
+  return Math.max(s.atMs, tick);
+}
+
 export type LiveStatus = "connecting" | "open" | "closed" | "error";
 
 /** Live session over WebSocket with reconnect + replay from lastSeq. */
@@ -75,17 +92,27 @@ export function useLiveSession(sessionId: string | null, opts: { textMode?: bool
           return;
         }
         if (typeof m.data !== "string") return;
-        const msg = JSON.parse(m.data);
+        let msg: { type?: string; seq?: number };
+        try {
+          msg = JSON.parse(m.data);
+        } catch {
+          return;
+        }
         if (msg.type === "TTS_BEGIN" || msg.type === "TTS_END" || msg.type === "YIELD" || msg.type === "ACK") {
           controlRef.current(msg as ControlMessage);
           return;
         }
         if (msg.type === "READY") return setStatus("open");
         if (typeof msg.seq === "number") {
-          events.current.push(msg as VerityEvent);
-          const next = reduce(stateRef.current, msg as VerityEvent);
-          stateRef.current = next;
-          setState(next);
+          const event = msg as VerityEvent;
+          try {
+            const next = reduce(stateRef.current, event);
+            events.current.push(event);
+            stateRef.current = next;
+            setState(next);
+          } catch {
+            return;
+          }
         }
       };
       ws.onerror = () => setStatus("error");
