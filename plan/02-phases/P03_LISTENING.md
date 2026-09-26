@@ -3,12 +3,12 @@
 **Status:** todo · **Time box:** 4–6 h · **Depends on:** P2
 
 ## Goal
-The candidate speaks; partials stream; turns end naturally (Flux events or fallback rules); the ring moves **provisionally while they talk**.
+The candidate speaks; partials stream; turns end naturally (our endpoint + hold rules over Scribe partials); the ring moves **provisionally while they talk**.
 
 ## In scope
 - Mic worklet (16 kHz PCM16, 20 ms), WS binary upload.
-- `providers/stt/real.ts` (Deepgram Flux preferred, Nova-3 fallback) + FakeStt script player.
-- `session/turns.ts`: Flux turn events, or fallback endpoint + hold rules; emit `EARLY_END_OF_TURN` / `TURN_RESUMED` / `END_OF_TURN`.
+- `providers/stt/real.ts` (ElevenLabs Scribe v2 Realtime, ADR-016) + FakeStt script player.
+- `session/turns.ts`: endpoint + hold rules; emit `EARLY_END_OF_TURN` / `TURN_RESUMED` / `END_OF_TURN`.
 - Keyterm boosting from the extractor.
 - `recorder.ts` → `candidate.wav` aligned to the session clock.
 - Live evaluator (prompt v1, ≤ 1 in flight) → provisional `BELIEF_UPDATED`.
@@ -26,4 +26,4 @@ The candidate speaks; partials stream; turns end naturally (Flux events or fallb
 - [ ] The thinking pause doesn't end the turn 5/5
 - [ ] Provisional ring move during the demo strong answer 4/5; buzzword list 0/5
 - [ ] `candidate.wav` aligns with word timings within ±250 ms (3 spot checks)
-- [ ] ADR added if Flux vs Nova-3 was decided by measurement
+- [ ] Scribe final-transcript lag measured and logged (ADR-016 revisit threshold 500 ms p95)

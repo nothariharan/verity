@@ -51,7 +51,9 @@ The one demo moment that must work: **a case ring swings toward "Owned" while th
 
 ### Stack (see DECISIONS.md)
 - **TypeScript end to end.** Next.js latest stable (16.3+, App Router) in `apps/web`. Node realtime server (Fastify + WebSocket) in `apps/server`. Zod schemas in `packages/contracts` are the single source of truth for types, events, and LLM output schemas.
-- STT: **Deepgram streaming**, preferring the Flux conversational model (model-level end-of-turn events) with Nova-3 plus our endpointing as fallback. TTS: **ElevenLabs `eleven_flash_v2_5` over WebSocket**. Both sit behind provider interfaces with Fakes.
+- STT: **ElevenLabs Scribe v2 Realtime** (streaming), with our own endpointing and hold rules for turn detection (ADR-016). TTS: **ElevenLabs `eleven_flash_v2_5` over WebSocket**. Both sit behind provider interfaces with Fakes.
+- LLM: **Gemini** (`@google/genai`) primary, **OpenAI** fallback on timeout/5xx/429/schema failure (ADR-017). Model IDs come from `.env`.
+- UI: light warm design system; the candidate presence is the provided `FluidOrb` (ADR-019).
 - Storage: SQLite (libSQL) via Drizzle locally; Postgres-compatible schema. **Append-only, hash-chained event log** is the source of truth.
 - **Banned:** speech-to-speech models in the live path, ElevenLabs Conversational Agents, Eleven v3 / Multilingual v2 for live speech, graph databases, vector databases, Redis/Kafka/Temporal, agent frameworks and swarms, and any facial-emotion or voice-tone analysis.
 
@@ -70,6 +72,7 @@ The one demo moment that must work: **a case ring swings toward "Owned" while th
 ---
 
 ## 4. Workflow for every task
+0. Read `plan/logs/COORDINATION.md`. Claim the paths you'll edit; post questions there. Commit by explicit path only.
 1. Read `plan/README.md` and find the current phase. Read that phase file.
 2. For non-trivial work, write a spec from `plan/templates/FEATURE_SPEC_TEMPLATE.md`.
 3. Build the smallest thing that meets the phase goal. Match the surrounding style.

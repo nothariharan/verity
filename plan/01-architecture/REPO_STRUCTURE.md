@@ -46,16 +46,16 @@ verity/
 ## `.env.example`
 ```
 PROVIDERS=fake                    # fake | real (per-provider overrides below)
-STT_PROVIDER=deepgram
-DEEPGRAM_API_KEY=
-DEEPGRAM_MODEL=flux               # or nova-3
-TTS_PROVIDER=elevenlabs
 ELEVENLABS_API_KEY=
+ELEVENLABS_STT_MODEL=scribe_v2_realtime
+ELEVENLABS_TTS_MODEL=eleven_flash_v2_5
 ELEVENLABS_VOICE_ID=
-ELEVENLABS_MODEL_ID=eleven_flash_v2_5
 TTS_CLAUSE_STREAMING=false
-LLM_PROVIDER=groq
-GROQ_API_KEY=
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-3.5-flash-lite
+OPENAI_API_KEY=
+OPENAI_MODEL=luna
+LLM_TIMEOUT_MS=8000
 MODEL_EXTRACTOR=
 MODEL_ASSESSOR=
 MODEL_LIVE=

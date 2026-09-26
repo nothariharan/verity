@@ -4,7 +4,7 @@
  BROWSER — apps/web (Next.js)                     REALTIME SERVER — apps/server (Fastify + WS)
 ┌──────────────────────────────────┐            ┌──────────────────────────────────────────────┐
 │ Mic worklet → PCM16 16k frames   │── binary ─►│ SessionHub (one per interview)                │
-│ VAD → duck + VAD msgs            │── json ───►│  ├─ Ears: SttProvider (Deepgram Flux/Nova-3)  │
+│ VAD → duck + VAD msgs            │── json ───►│  ├─ Ears: SttProvider (ElevenLabs Scribe RT)  │
 │ Player worklet (gain, flush)     │◄─ binary ──│  ├─ Mouth: TtsProvider (ElevenLabs Flash)     │
 │ Ack clips (local)                │            │  ├─ Floor: VoiceFSM (LISTEN/ACK/SPEAK/YIELD)  │
 │ Integrity sensors (local)        │── json ───►│  ├─ Recorder (candidate.wav, verity.wav)      │

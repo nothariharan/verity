@@ -7,7 +7,7 @@ Two clean runs in a row before P10 is verified. Time each one.
 - [ ] Headset selected for input and output; mic level checked
 - [ ] Venue Wi-Fi tested; phone hotspot ready
 - [ ] `pnpm dev` from the release commit; `/v1/health` all green
-- [ ] Credits checked: ElevenLabs characters, Deepgram minutes, LLM quota
+- [ ] Credits checked: ElevenLabs characters + STT minutes, Gemini and OpenAI quota
 - [ ] Window 1 (laptop): `/interview/[id]`. Window 2 (projector): `/board/[id]`
 - [ ] Demo candidate loaded; hero cases present: *Kafka · 50k ev/s*, *RAG · 100k docs*, *40% latency cut*
 - [ ] Backup recording on the desktop, plays offline

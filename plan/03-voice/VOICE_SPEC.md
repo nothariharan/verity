@@ -3,7 +3,7 @@
 Verity's voice should feel like a person who listens: always hearing, never talking over you, quick to reply, quiet acknowledgements when you're mid-thought. **The voice never chooses words.** It speaks committed questions only (ADR-003).
 
 ## 1. Two open streams
-- **Candidate → server:** mic open for the entire session, *including while Verity speaks*. `getUserMedia({audio:{echoCancellation:true, noiseSuppression:true, autoGainControl:true, channelCount:1}})` → AudioWorklet → 16 kHz PCM16, 20 ms frames → WS binary → Deepgram + `candidate.wav`.
+- **Candidate → server:** mic open for the entire session, *including while Verity speaks*. `getUserMedia({audio:{echoCancellation:true, noiseSuppression:true, autoGainControl:true, channelCount:1}})` → AudioWorklet → 16 kHz PCM16, 20 ms frames → WS binary → ElevenLabs Scribe realtime + `candidate.wav`.
 - **Server → candidate:** ElevenLabs PCM → `verity.wav` + WS binary tagged by questionId → player worklet → GainNode → output.
 
 ## 2. Floor states
@@ -22,7 +22,7 @@ Verity's voice should feel like a person who listens: always hearing, never talk
 
 ### LISTEN
 - STT streams; partials → `SEGMENT_PARTIAL`; finals → `SEGMENT_FINAL`.
-- **Turn detection:** Flux turn events (`EARLY_END_OF_TURN`, `TURN_RESUMED`, `END_OF_TURN`) when available. Fallback (Nova-3): endpoint 700 ms base; hold up to 3.0 s if the last words are a connective/filler (`because, and, so, but, then, which, like, um, uh, I mean, basically`); hold 1.5 s after < 3 words unless it's a complete short answer ("yes", "no", "I'm not sure"). Early end-of-turn in fallback mode = endpoint − 300 ms.
+- **Turn detection (ours, ADR-016):** emit `EARLY_END_OF_TURN`, `TURN_RESUMED`, `END_OF_TURN` from these rules: endpoint 700 ms base; hold up to 3.0 s if the last words are a connective/filler (`because, and, so, but, then, which, like, um, uh, I mean, basically`); hold 1.5 s after < 3 words unless it's a complete short answer ("yes", "no", "I'm not sure"). Early end-of-turn = endpoint − 300 ms.
 - Text mode: `TEXT_ANSWER` = immediate `END_OF_TURN`.
 
 ### ACK (acknowledgement)
@@ -55,9 +55,10 @@ The drafter receives the interrupted question, so Verity responds to what was sa
 - **Speech normalization** for TTS input only: `k8s` → "Kubernetes", `p95` → "P ninety-five", `QPS` → "queries per second", `50k` → "fifty thousand". Committed text stays as written.
 - Ack clips are generated once with the same voice → `apps/web/public/audio/acks/`.
 
-## 5. Deepgram (verify parameters in P3)
-- Flux conversational model preferred (turn events); Nova-3 fallback with `interim_results`, `endpointing`, `utterance_end_ms`, `smart_format`, `punctuate`.
-- Keyterm boost from extractor `keyterms` (Kafka, FAISS, HNSW, …).
+## 5. STT: ElevenLabs Scribe v2 Realtime (ADR-016; verify parameters in P3)
+- Server-side WebSocket; PCM16 16 kHz frames forwarded as received; partial and committed transcripts with word timestamps where available.
+- Turn detection is ours (§2 rules). Scribe's own VAD commit, if used, is only a hint; our endpointing decides `END_OF_TURN`. Early end-of-turn = endpoint − 300 ms.
+- Keyterms from extractor `keyterms` (Kafka, FAISS, HNSW, …) if the API supports biasing.
 - Keep the connection alive during SPEAK.
 - `sessionMs = streamStartMs + word.start·1000`.
 

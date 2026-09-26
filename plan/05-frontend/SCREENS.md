@@ -2,14 +2,17 @@
 
 Next.js latest (App Router), TypeScript, Tailwind, `@xyflow/react` for the board, zustand store driven by one event reducer (`lib/store.ts`). No polling; everything is event-driven with reconnect + replay.
 
-## Design language: "case file under glass"
-- Near-black graphite background, soft paper-white text, thin hairline rules, generous spacing. It should feel like an investigator's desk, not a dashboard.
+Route map (ADR-019): `/` landing (see `LANDING.md`) · `/app` recruiter dashboard, `/me` student dashboard (see `DASHBOARDS.md`) · `/interview/[id]` candidate · `/app/live/[id]` live case board (was `/board/[id]`) · `/app/dossier/[id]` and `/me/report/[id]` dossier.
+
+## Design language: "forensic case file" (light, warm; ADR-019)
+- Warm off-white canvas `#F8F6F2`, ink `#111111`, muted `#77736D`, hairline `#E5E1DA`, white cards with a soft shadow and 16 px radius. Calm, editorial, evidence-first. The page stays neutral; accents live only on product visuals.
 - Hypothesis colors (used everywhere, including the ring):
-  - **Owned** `#34D399` (green)
-  - **Contributed** `#60A5FA` (blue)
-  - **Surface** `#F59E0B` (amber)
-  - Conflict flag `#F43F5E` (rose) · Open `#A1A1AA` (zinc) · Active focus ring `#E5E7EB`
-- Type: one sans (Geist or Inter) and one mono (Geist Mono) for timestamps, quotes, and hashes.
+  - **Owned** `#3F8F62` (green)
+  - **Contributed** `#5B7DB1` (muted blue)
+  - **Surface** `#D99A2B` (amber)
+  - Conflict flag `#C85A52` · Open `#9A958E` · Active focus ring `#111111`
+- Type: Geist Sans (tight tracking on display sizes) and Geist Mono for timestamps, quotes, and hashes.
+- Candidate presence: the provided `FluidOrb` wrapped by `VoiceOrb` (scale/glow from voice state and audio level).
 - Motion: belief ring segments tween over 600 ms; provisional = dashed segments with a slow shimmer; settle = one pulse and the ring goes solid; receipt = a card slides into the stream. Respect `prefers-reduced-motion`.
 
 ## The belief ring (signature component)
@@ -20,7 +23,7 @@ Upload resume (PDF/TXT/MD), paste or upload the JD, duration (10/15/20 min), mod
 
 ## 2. Candidate `/interview/[id]`
 Calm and minimal. No board, no beliefs.
-- Center: presence visual (2D waveform orb; the 3D Lens in P11).
+- Center: presence visual (`VoiceOrb` over the provided `FluidOrb`; the 3D Lens in P11 is optional).
 - The current question as text, fading in with the audio.
 - Captions (last two lines), floor pill (Listening · Verity speaking · You're speaking), timer.
 - Always-visible small **Type instead** toggle (text mode).

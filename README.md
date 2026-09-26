@@ -17,6 +17,6 @@ Planning complete; implementation starts at phase P0. See [`plan/README.md`](pla
 - [`plan/07-testing/`](plan/07-testing/): how we prove it works
 
 ## Stack (planned)
-Next.js (latest) · Node + Fastify WebSockets · zod contracts · Drizzle + SQLite · Deepgram streaming STT · ElevenLabs Flash v2.5 TTS · fast LLMs via Groq
+Next.js (latest) · Node + Fastify WebSockets · zod contracts · Drizzle + SQLite · ElevenLabs Scribe realtime STT · ElevenLabs Flash v2.5 TTS · Gemini (OpenAI fallback)
 
 `research/` and `MASTER_AI_INTERVIEW_BOT_BLUEPRINT.md` are early brainstorming under a previous working name, kept for reference.

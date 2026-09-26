@@ -71,3 +71,25 @@ Roles: **extractor** (strongest structured model, once), **assessor** (fast, tur
 ## ADR-015 — 3D is last and optional
 **Status:** Accepted
 P11 "Lens": an abstract 3D presence on the candidate screen driven by voice state and the active case's belief. Behind `NEXT_PUBLIC_ENABLE_LENS`, default off. The case board stays 2D. No human avatar.
+
+## ADR-016 — STT: ElevenLabs Scribe v2 Realtime (supersedes ADR-005)
+**Status:** Accepted · 2026-09-26 (verify in P3)
+**Decision:** Streaming STT is ElevenLabs Scribe v2 Realtime over WebSocket from the server. Turn detection is primarily ours: silence endpointing + hold rules (trailing conjunctions, fillers, mid-number) from `VOICE_SPEC.md`, using partial/committed transcripts from Scribe. Keyterms from the resume are passed if supported. Behind the `SttProvider` interface with a Fake.
+**Why:** The team measured it as more natural and fast on our voices, and one vendor for STT + TTS simplifies keys and latency debugging.
+**Trade-off:** No model-level eager end-of-turn event; speculative drafting uses our own early-EOT (short silence threshold) instead.
+**Revisit if:** p95 final-transcript lag on the voice script is > 500 ms.
+
+## ADR-017 — LLM: Gemini primary, OpenAI fallback (supersedes the host choice in ADR-014)
+**Status:** Accepted · 2026-09-26
+**Decision:** All LLM roles call Gemini via `@google/genai` with a JSON schema generated from zod. The same request falls back once to OpenAI (`openai` SDK, structured outputs) on timeout, 5xx, 429, or schema validation failure. Models come from `GEMINI_MODEL` / `OPENAI_MODEL` with optional per-role `MODEL_<ROLE>` overrides. Every call logs provider, model, latency, and whether fallback fired.
+**Why:** Keys the team already has, strong structured output, and a working fallback path for stage reliability.
+
+## ADR-018 — Integrity signal adjustments
+**Status:** Accepted · 2026-09-26
+**Decision:** (1) "Second voice" becomes an experimental overlap heuristic (speech detected while the candidate transcript is idle, or two concurrent energy sources), since streaming STT gives no diarization; off by default. (2) Add `VIRTUAL_AUDIO_DEVICE` and `VIRTUAL_CAMERA` observations, derived from `enumerateDevices()` labels matching known virtual-device names. All remain neutral, timestamped observations; no score.
+**Source:** `research/10_ADVANCED_ANTI_CHEAT_AND_AUTHENTICITY_FACTORS.md` (reference only).
+
+## ADR-019 — Light warm design system, FluidOrb presence, landing + dashboards
+**Status:** Accepted · 2026-09-26
+**Decision:** The whole product uses a light, warm "forensic case file" system (off-white `#F8F6F2`, ink `#111`, hairline `#E5E1DA`, white floating cards), replacing the dark theme in `SCREENS.md`. The candidate presence is the provided **FluidOrb** WebGL component (shader unmodified) wrapped by `VoiceOrb` for state and level. P11 Lens becomes an optional upgrade on top of it. Scope adds a marketing landing page (`/`), a recruiter dashboard (`/app`), and a student practice dashboard (`/me`); demo mode has no auth (role switch). Landing copy maps "claim states" onto the real model: Owned / Contributed / Surface / Open.
+**Why:** Matches the reference visuals, keeps the audit-first product legible for judges, and the orb gives the voice interview a clear, non-human presence.

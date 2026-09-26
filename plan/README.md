@@ -31,7 +31,7 @@ Statuses: `todo` · `in-progress` · `verified` · `cut`
 | P0 | Foundations | Monorepo, zod contracts, hash-chained event log, fakes, CI | todo |
 | P1 | Case engine (text) | Claims → cases → belief updates → discriminating questions, typed answers | todo |
 | P2 | Case board | Live 2D board with belief rings and receipts panel | todo |
-| P3 | Listening | Deepgram streaming, turn events, live provisional belief | todo |
+| P3 | Listening | ElevenLabs Scribe streaming, turn rules, live provisional belief | todo |
 | P4 | Speaking | ElevenLabs Flash speaks committed questions | todo |
 | P5 | Duplex | Barge-in, acknowledgements, echo guard, four-state loop | todo |
 | P6 | Speculative drafting | Next question pre-drafted during the answer | todo |
