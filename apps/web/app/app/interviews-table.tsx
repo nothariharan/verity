@@ -1,13 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { reduceAll, type Belief, type CaseStatus } from "@verity/contracts";
+import { useEffect, useState } from "react";
+import type { Belief, CaseStatus } from "@verity/contracts";
 import { BeliefRing } from "@/components/case/belief-ring";
-import { DemoBadge, Pill } from "@/components/ui/primitives";
-import { DEMO_EVENTS, DEMO_INTERVIEWS } from "@/lib/fixtures/demo";
+import { Pill } from "@/components/ui/primitives";
 import { STATUS_COLOR } from "@/lib/hypotheses";
-import { finalStatus, orderedCases, SERVER_URL } from "@/lib/session";
+import { SERVER_URL } from "@/lib/session";
 
 type Row = {
   id: string;
@@ -17,6 +16,7 @@ type Row = {
   when: string;
   cases: { id: string; label: string; status: CaseStatus; belief: Belief }[];
   demo: boolean;
+  mode?: string;
 };
 
 type ServerRow = {
@@ -26,20 +26,11 @@ type ServerRow = {
   candidateName: string | null;
   started: boolean;
   ended: boolean;
+  mode?: string;
   cases: { id: string; label: string; status: CaseStatus; belief: Belief }[];
 };
 
 export function InterviewsTable() {
-  const demoRows = useMemo<Row[]>(() => {
-    const done = reduceAll(DEMO_EVENTS);
-    const live = reduceAll(DEMO_EVENTS, 62_000);
-    const toCases = (s: typeof done) => orderedCases(s).map((c) => ({ id: c.id, label: c.label, status: finalStatus(c, !!s.ended), belief: c.belief }));
-    return DEMO_INTERVIEWS.map((d) => ({
-      ...d,
-      demo: true,
-      cases: d.status === "Completed" ? toCases(done) : d.status === "Live" ? toCases(live) : [],
-    }));
-  }, []);
   const [serverRows, setServerRows] = useState<Row[]>([]);
   const [serverUp, setServerUp] = useState<boolean | null>(null);
 
@@ -56,6 +47,7 @@ export function InterviewsTable() {
             status: r.ended ? "Completed" : r.started ? "Live" : "Ready",
             when: new Date(r.createdAt).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }),
             cases: r.cases,
+            mode: r.mode,
             demo: false,
           })),
         );
@@ -63,7 +55,7 @@ export function InterviewsTable() {
       .catch(() => setServerUp(false));
   }, []);
 
-  const rows = [...serverRows, ...demoRows];
+  const rows = serverRows.filter((r) => r.mode !== "practice");
 
   return (
     <div className="card overflow-hidden">
@@ -80,6 +72,13 @@ export function InterviewsTable() {
             </tr>
           </thead>
           <tbody>
+            {rows.length === 0 && serverUp && (
+              <tr>
+                <td colSpan={6} className="px-5 py-10 text-[14px] text-muted">
+                  No interviews yet. Create one and send the candidate the interview link.
+                </td>
+              </tr>
+            )}
             {rows.map((r) => {
               const tally = (k: CaseStatus) => r.cases.filter((c) => c.status === k).length;
               return (
@@ -87,7 +86,6 @@ export function InterviewsTable() {
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{r.candidate}</span>
-                      {r.demo && <DemoBadge />}
                     </div>
                     <div className="text-[12.5px] text-muted">{r.role}</div>
                   </td>
@@ -137,7 +135,7 @@ export function InterviewsTable() {
                         Watch live →
                       </Link>
                     ) : r.status === "Completed" ? (
-                      <Link href={`/app/dossier/${r.demo ? "demo" : r.id}`} className="text-[13px] font-medium underline-offset-4 hover:underline">
+                      <Link href={`/app/dossier/${r.id}`} className="text-[13px] font-medium underline-offset-4 hover:underline">
                         Open dossier →
                       </Link>
                     ) : (
@@ -151,11 +149,7 @@ export function InterviewsTable() {
         </table>
       </div>
       <div className="border-t border-line bg-bg/40 px-5 py-2.5 text-[11.5px] text-muted">
-        {serverUp === false
-          ? "Server offline: showing demo interviews only."
-          : serverUp
-            ? `${serverRows.length} interview${serverRows.length === 1 ? "" : "s"} from this server · demo rows below`
-            : "Checking server…"}
+        {serverUp === false ? "The Verity server is not reachable." : serverUp ? `${rows.length} interview${rows.length === 1 ? "" : "s"}` : "Checking server…"}
       </div>
     </div>
   );

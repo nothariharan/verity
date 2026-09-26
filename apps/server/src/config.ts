@@ -18,11 +18,15 @@ export type LlmRole = "extractor" | "assessor" | "live" | "drafter" | "summary";
 
 const nonEmpty = (v: string | undefined) => (v && v.trim() ? v.trim() : undefined);
 
+function hasAnyKey(env: NodeJS.ProcessEnv) {
+  return !!(nonEmpty(env.GEMINI_API_KEY) || nonEmpty(env.OPENAI_API_KEY) || nonEmpty(env.ELEVENLABS_API_KEY));
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   return {
     port: Number(env.PORT ?? 8787),
     databaseUrl: env.DATABASE_URL ?? "file:./data/verity.db",
-    providers: env.PROVIDERS === "real" ? "real" : "fake",
+    providers: env.PROVIDERS === "fake" ? "fake" : env.PROVIDERS === "real" || hasAnyKey(env) ? "real" : "fake",
     llm: {
       timeoutMs: Number(env.LLM_TIMEOUT_MS ?? 8000),
       gemini: { apiKey: nonEmpty(env.GEMINI_API_KEY), model: env.GEMINI_MODEL ?? "gemini-3.5-flash-lite" },

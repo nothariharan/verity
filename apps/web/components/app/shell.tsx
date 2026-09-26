@@ -12,13 +12,10 @@ const NAV: Record<"team" | "candidate", NavItem[]> = {
   team: [
     { href: "/app", label: "Interviews", icon: "list" },
     { href: "/app/new", label: "New interview", icon: "plus" },
-    { href: "/app/live/demo", label: "Live board", icon: "live", match: "/app/live" },
-    { href: "/app/dossier/demo", label: "Dossiers", icon: "doc", match: "/app/dossier" },
   ],
   candidate: [
     { href: "/me", label: "Practice", icon: "growth" },
     { href: "/me/new", label: "Start practice", icon: "mic" },
-    { href: "/me/report/demo", label: "Reports", icon: "doc", match: "/me/report" },
   ],
 };
 
@@ -57,7 +54,7 @@ export function AppShell({ role, children }: { role: "team" | "candidate"; child
         <div className="mt-auto space-y-3 px-2">
           <RoleSwitch role={role} />
           <p className="text-[11px] leading-relaxed text-muted">
-            Demo mode: no sign-in. Views marked <span className="font-mono">DEMO DATA</span> are rendered from a scripted event log.
+            No sign-in in this build. Interviews and practice runs are real sessions on this server.
           </p>
         </div>
       </aside>

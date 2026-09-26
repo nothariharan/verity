@@ -1,3 +1,5 @@
+import { createReadStream, existsSync, statSync } from "node:fs";
+import { join } from "node:path";
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import websocket from "@fastify/websocket";
@@ -106,6 +108,17 @@ export async function buildApp(deps: AppDeps) {
 
   app.get<{ Params: { id: string } }>("/v1/sessions/:id/verify", async (req) => {
     return verifyChain(await log.read(req.params.id));
+  });
+
+  app.get<{ Params: { id: string; track: string } }>("/v1/sessions/:id/audio/:track", async (req, reply) => {
+    if (req.params.track !== "candidate" && req.params.track !== "verity") return reply.code(400).send({ error: "bad_track" });
+    const path = join(process.cwd(), "data", "audio", req.params.id, `${req.params.track}.wav`);
+    if (!existsSync(path)) return reply.code(404).send({ error: "no_audio" });
+    const size = statSync(path).size;
+    reply.header("content-type", "audio/wav");
+    reply.header("accept-ranges", "bytes");
+    reply.header("content-length", size);
+    return reply.send(createReadStream(path));
   });
 
   app.get<{ Params: { id: string } }>("/v1/session/:id", { websocket: true }, async (socket, req) => {

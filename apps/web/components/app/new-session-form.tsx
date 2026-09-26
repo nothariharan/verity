@@ -90,9 +90,6 @@ export function NewSessionForm({ mode }: { mode: "recruiter" | "practice" }) {
           <Button type="submit" disabled={busy} arrow>
             {busy ? "Preparing cases…" : mode === "practice" ? "Start practice" : "Create interview"}
           </Button>
-          <Button href={mode === "practice" ? "/interview/demo" : "/app/live/demo"} variant="ghost">
-            Use demo candidate
-          </Button>
         </div>
       </div>
       <aside className="card h-fit space-y-4 p-6 text-[13px] leading-relaxed text-ink-2">

@@ -5,9 +5,20 @@ import type { EventLog } from "../log/event-log";
 export const newId = (prefix: string) => `${prefix}_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
 
 /** Hooks the case engine attaches to (P1). The session itself only owns the clock and the log. */
+export interface SpokenTurn {
+  segmentIds: string[];
+  text: string;
+  startMs: number;
+  endMs: number;
+}
+
 export interface SessionBrain {
   onStart(s: Session): Promise<void>;
-  onCandidateTurn(s: Session, turn: { segmentIds: string[]; text: string; startMs: number; endMs: number }): Promise<void>;
+  onCandidateTurn(s: Session, turn: SpokenTurn): Promise<void>;
+  /** Mid-answer text. Provisional belief only; no receipt. */
+  onPartial?(s: Session, text: string): Promise<void>;
+  /** Early end-of-turn. May draft the next question; must not speak it. */
+  onEarly?(s: Session, text: string): Promise<void>;
 }
 
 export class Session {
@@ -67,6 +78,50 @@ export class Session {
       const seg = { id: newId("seg"), speaker: "candidate" as const, text, startMs, endMs: t, final: true };
       await this.emit({ type: "SEGMENT_FINAL", payload: seg });
       const turn = { segmentIds: [seg.id], text, startMs, endMs: t };
+      await this.emit({ type: "END_OF_TURN", payload: turn });
+      await this.brain?.onCandidateTurn(this, turn);
+    });
+  }
+
+  /** Live transcript while the candidate is still speaking. */
+  audioPartial(seg: { id: string; text: string; startMs: number; endMs: number }) {
+    return this.enqueue(async () => {
+      if (!this.state.started || this.state.ended || this.state.textMode) return;
+      await this.emit({
+        type: "SEGMENT_PARTIAL",
+        payload: { ...seg, speaker: "candidate", final: false },
+      });
+      await this.brain?.onPartial?.(this, seg.text);
+    });
+  }
+
+  earlyTurn(turn: SpokenTurn) {
+    return this.enqueue(async () => {
+      if (!this.state.started || this.state.ended || this.state.textMode) return;
+      await this.emit({ type: "EARLY_END_OF_TURN", payload: turn });
+      await this.brain?.onEarly?.(this, turn.text);
+    });
+  }
+
+  resumeTurn(turn: SpokenTurn) {
+    return this.enqueue(async () => {
+      if (!this.state.started || this.state.ended) return;
+      await this.emit({ type: "TURN_RESUMED", payload: turn });
+    });
+  }
+
+  spokenAnswer(turn: SpokenTurn) {
+    return this.enqueue(async () => {
+      if (!this.state.started || this.state.ended || this.state.textMode) return;
+      const seg = {
+        id: turn.segmentIds[0] ?? newId("seg"),
+        speaker: "candidate" as const,
+        text: turn.text,
+        startMs: turn.startMs,
+        endMs: turn.endMs,
+        final: true,
+      };
+      await this.emit({ type: "SEGMENT_FINAL", payload: seg });
       await this.emit({ type: "END_OF_TURN", payload: turn });
       await this.brain?.onCandidateTurn(this, turn);
     });
