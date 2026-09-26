@@ -21,6 +21,11 @@ A ring around each case node, split into three arcs proportional to `owned / con
 ## 1. Setup `/`
 Upload resume (PDF/TXT/MD), paste or upload the JD, duration (10/15/20 min), mode (Recruiter / Practice), "Use demo candidate". After extraction: cases appear as rings with their priors, and required skills with no claim appear as outlined chips. Buttons: **Start interview** (opens `/interview/[id]`) and **Open case board** (new window).
 
+## Interview room (reference layout, 2026-09-26)
+One component, `components/room/interview-room.tsx`: top bar (role, status, clock, End interview) · left **Investigation plan** (claims, progress) · center **stage** (Verity mark, floor status, the current question, FluidOrb with a level-driven waveform, Mute / End / Type instead) · right **Live investigation** (active case tree + Current focus with "why this question" and belief bars) · bottom **Live transcript** and **Key evidence** (receipts with clip buttons).
+- `viewer="team"` (`/app/live/[id]`) and `viewer="practice"` (practice-mode `/interview/[id]`): everything visible.
+- `viewer="candidate"` (recruiter-mode `/interview/[id]`): no beliefs, statuses, verdicts, or evidence. The plan shows only "discussed / not yet"; the right column becomes a plain "How this works" card; Key evidence is hidden.
+
 ## 2. Candidate `/interview/[id]`
 Calm and minimal. No board, no beliefs.
 - Center: presence visual (`VoiceOrb` over the provided `FluidOrb`; the 3D Lens in P11 is optional).
