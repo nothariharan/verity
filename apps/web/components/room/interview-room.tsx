@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import type { SessionState } from "@verity/contracts";
+import type { ReactNode } from "react";
+import type { Receipt, SessionState } from "@verity/contracts";
 import { DemoBadge, Logo } from "@/components/ui/primitives";
 import { orderedCases } from "@/lib/session";
 import { formatClock } from "@/lib/utils";
@@ -28,6 +29,8 @@ export function InterviewRoom({
   controls,
   onAnswer,
   onEnd,
+  onPlay,
+  banner,
   standalone,
   connection,
 }: {
@@ -39,6 +42,8 @@ export function InterviewRoom({
   controls?: StageControls;
   onAnswer?: (text: string) => void;
   onEnd?: () => void;
+  onPlay?: (r: Receipt) => void;
+  banner?: ReactNode;
   standalone?: boolean;
   connection?: string;
 }) {
@@ -84,6 +89,7 @@ export function InterviewRoom({
           )}
         </div>
       </header>
+      {banner}
 
       <div className="grid flex-1 gap-4 px-4 pb-4 md:px-6 lg:grid-cols-[280px_minmax(0,1fr)_320px] xl:grid-cols-[300px_minmax(0,1fr)_340px]">
         <PlanPanel cases={cases} activeId={s.activeCaseId} ended={!!s.ended} reveal={reveal} />
@@ -101,7 +107,7 @@ export function InterviewRoom({
         <div className="lg:col-span-2">
           <TranscriptPanel s={s} onAnswer={onAnswer} />
         </div>
-        {reveal ? <EvidencePanel s={s} /> : <div className="hidden lg:block" />}
+        {reveal ? <EvidencePanel s={s} onPlay={onPlay} /> : <div className="hidden lg:block" />}
       </div>
     </div>
   );

@@ -48,3 +48,5 @@ Statuses: `todo` · `in-progress` · `verified` · `cut`
 
 ### Moving a phase to `verified`
 All tasks done → every gate item passes → evidence in `logs/VERIFICATION_LOG.md` → regression sweep green (`07-testing/VERIFICATION_GATES.md`).
+
+P1–P10 stay `todo`. The spoken socket, receipt clip range, candidate join link, and dashboard Playwright run are logged in `logs/VERIFICATION_LOG.md`. That is not a full phase gate. P11 stays out.

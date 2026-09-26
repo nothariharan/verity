@@ -36,8 +36,9 @@ Do not edit a path you do not own. If you need a contract change, write the exac
 _None yet. Format: `- [date] [from] question — answer:`_
 
 ## Handoffs
-- 2026-09-26 build agent → human: manual voice tests (`plan/07-testing/VOICE_TEST_SCRIPT.md`) need a person with a headset once P3–P5 are in.
-- 2026-09-26 sync agent: Scribe, Flash, and the mic/player/integrity modules are called from `integrate/product` (`session/live.ts`, candidate room). Further edits to those modules stay on their lane branches and worktrees.
+- 2026-09-26 build agent → human: manual voice tests (`plan/07-testing/VOICE_TEST_SCRIPT.md`) need a person with a headset once P3–P5 are in. V3 (short answer hold) and a specific spoken answer are now also covered offline through the session socket.
+- 2026-09-26 sync agent: Scribe, Flash, and the mic/player/integrity modules are called from `integrate/product` (`session/live.ts`, candidate room). `main.ts` passes `speech` into the app. Flash closes each question context so playback can finish. Further edits to lane modules stay on their lane branches.
+- 2026-09-26 sync agent: recruiter create lands on `/app/live/[id]?invite=1` with a copyable `/interview/[id]` link. Dossier and evidence clip buttons play `candidate.wav` when a recording exists. Demo dossier stays labeled and does not pretend to have audio.
 
 ## Shared-file changes
 - 2026-09-26 build agent: added ADR-016..019 to `DECISIONS.md` (ElevenLabs Scribe STT, Gemini→OpenAI fallback, integrity signal changes, light design + FluidOrb + landing/dashboards).
