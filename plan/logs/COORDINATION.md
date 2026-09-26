@@ -17,6 +17,7 @@ Every agent reads this before editing. Claim paths before you touch them; releas
 | `lane/ledger` | `C:\Users\HARIHARAN\Desktop\verity-lanes\ledger` | Consistency ledger |
 | `lane/floor` | `C:\Users\HARIHARAN\Desktop\verity-lanes\floor` | Mic, playback, echo, focus, devices |
 | `integrate/product` | `C:\Users\HARIHARAN\Desktop\BnB` | Session, engine wiring, app, interview UI |
+| `lane/finish` | `C:\Users\HARIHARAN\Desktop\verity-lanes\finish` | Dossier coverage and depth, fatigue factor, ack clips. Does not edit `app.ts`, `config.ts`, `package.json`, or `apps/server/src/mcp/**`. |
 
 Work only inside your worktree. Do not edit another lane's files to "make it compile". If you need a contract or a shared file, write the diff under Open questions and stop.
 
@@ -43,3 +44,4 @@ _None yet. Format: `- [date] [from] question — answer:`_
 ## Shared-file changes
 - 2026-09-26 build agent: added ADR-016..019 to `DECISIONS.md` (ElevenLabs Scribe STT, Gemini→OpenAI fallback, integrity signal changes, light design + FluidOrb + landing/dashboards).
 - 2026-09-26 build agent: `AGENTS.md` stack section updated to match ADR-016/017; coordination rule added.
+- 2026-09-26 finish lane: added `roleCoverage` and `depthShown` to `packages/contracts`. No event schema change.

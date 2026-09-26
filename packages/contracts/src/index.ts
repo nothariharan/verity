@@ -3,3 +3,4 @@ export * from "./events";
 export * from "./ws";
 export * from "./reducer";
 export * from "./canonical";
+export * from "./coverage";

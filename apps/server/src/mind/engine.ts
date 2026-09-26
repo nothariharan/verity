@@ -26,13 +26,25 @@ function memoOf(sessionId: string, caseId: string): CaseMemo {
   return c;
 }
 
+const ACTION = new RegExp(
+  "\\b(led|designed|built|owned|architected|engineered|shipped|implemented|developed|authored|deployed|created|launched|reduced|migrated|automated|mentored|helped|contributed|worked)\\b",
+  "i",
+);
+const CONTACT = /@|\+?\d[\d\s().-]{8,}/;
+
 /** Offline extractor: one case per substantive resume line. Used when providers are fake, and as a fallback. */
 export function heuristicExtract(resume: string, jd: string): ExtractionOut {
   const lines = resume
     .split(/\n+/)
     .map((l) => l.replace(/^[\s•\-*]+/, "").trim())
-    .filter((l) => l.length >= 24);
-  const jdSkills = (jd.match(/\b[A-Z][A-Za-z0-9+.#]{2,}\b/g) ?? []).slice(0, 8);
+    .filter((l) => l.length >= 24 && ACTION.test(l) && !CONTACT.test(l));
+  const required = new Set<string>();
+  for (const line of jd.split(/\n+/)) {
+    if (!/\brequired\b/i.test(line)) continue;
+    for (const name of line.match(/\b[A-Z][A-Za-z0-9+.#]{2,}\b/g) ?? []) required.add(name);
+  }
+  const skip = new Set(["Required", "Requirements", "Nice", "Preferred", "The", "And", "With", "For", "You", "Our"]);
+  const jdSkills = Array.from(new Set(jd.match(/\b[A-Z][A-Za-z0-9+.#]{2,}\b/g) ?? [])).filter((name) => !skip.has(name)).slice(0, 8);
   const cases = lines.slice(0, 12).map((line) => {
     const owns = /\b(led|designed|built|owned|architected)\b/i.test(line) ? 1 : /\b(worked on|helped|contributed)\b/i.test(line) ? 0.5 : 0;
     const nums = (line.match(/\d[\d,]*%?/g) ?? []).slice(0, 3);
@@ -43,7 +55,7 @@ export function heuristicExtract(resume: string, jd: string): ExtractionOut {
       sourceSpan: line,
       technologies: techs,
       metrics: nums,
-      skills: [],
+      skills: jdSkills.filter((name) => line.toLowerCase().includes(name.toLowerCase())),
       roleRelevance: 0.6,
       specificity: Math.min(1, (nums.length + techs.length) / 4),
       ownershipLanguage: owns,
@@ -51,7 +63,11 @@ export function heuristicExtract(resume: string, jd: string): ExtractionOut {
     };
   });
   return {
-    skills: jdSkills.map((name) => ({ name, importance: 0.6, requirement: "preferred" as const })),
+    skills: jdSkills.map((name) => ({
+      name,
+      importance: required.has(name) ? 0.8 : 0.6,
+      requirement: required.has(name) ? ("required" as const) : ("preferred" as const),
+    })),
     cases,
     keyterms: techsOf(cases),
   };
@@ -59,6 +75,25 @@ export function heuristicExtract(resume: string, jd: string): ExtractionOut {
 
 function techsOf(cases: ExtractionOut["cases"]) {
   return Array.from(new Set(cases.flatMap((c) => c.technologies))).slice(0, 20);
+}
+
+/** Keep a model's claim only when it points at a real resume line. The stored span is that line, not a paraphrase. */
+export function groundSpan(resume: string, span: string): string | null {
+  if (resume.includes(span) && span.trim().length >= 24) return span;
+  const stop = new Set(["the", "and", "for", "with", "from", "that", "this", "into", "over", "using", "across", "then"]);
+  const words = (s: string) => (s.toLowerCase().match(/[a-z0-9][a-z0-9+.#-]{3,}/g) ?? []).filter((w) => !stop.has(w));
+  const wanted = new Set(words(span));
+  const lines = resume
+    .split(/\n+/)
+    .map((l) => l.replace(/^[\s•\-*]+/, "").trim())
+    .filter((l) => l.length >= 24);
+  let best: { line: string; score: number } | null = null;
+  for (const line of lines) {
+    const score = words(line).filter((w) => wanted.has(w)).length;
+    if (!best || score > best.score) best = { line, score };
+  }
+  if (!best || best.score < 3) return null;
+  return best.line;
 }
 
 function fallbackQuestion(label: string, kind: string): string {
@@ -136,6 +171,12 @@ export function createEngine(llm: LlmProvider | null): { brain: SessionBrain; on
         }
       }
       const data = extracted ?? heuristicExtract(resume, jd);
+      const groundedCases = data.cases
+        .map((c) => {
+          const sourceSpan = groundSpan(resume, c.sourceSpan);
+          return sourceSpan ? { ...c, sourceSpan } : null;
+        })
+        .filter((c): c is NonNullable<typeof c> => !!c);
       const skills: Skill[] = data.skills.slice(0, 16).map((sk) => ({
         id: newId("skill"),
         name: sk.name.slice(0, 80),
@@ -144,7 +185,7 @@ export function createEngine(llm: LlmProvider | null): { brain: SessionBrain; on
       }));
       for (const sk of skills) await s.emit({ type: "SKILL_ADDED", payload: sk });
 
-      const ranked = data.cases
+      const ranked = (groundedCases.length ? groundedCases : heuristicExtract(resume, jd).cases)
         .filter((c) => resume.includes(c.sourceSpan) && isValidQuestionText(c.openingQuestion))
         .map((c) => ({ ...c, importance: clamp(c.roleRelevance) * (0.5 + 0.5 * clamp(c.specificity)) }))
         .sort((a, z) => z.importance - a.importance)
