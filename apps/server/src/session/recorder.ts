@@ -1,4 +1,4 @@
-import { closeSync, mkdirSync, openSync, writeSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, statSync, writeSync } from "node:fs";
 import { dirname } from "node:path";
 
 /** Append-only PCM16 WAV. The header is rewritten on close so the length is exact. */
@@ -27,6 +27,20 @@ export class WavRecorder {
     writeSync(this.fd, header, 0, header.length, 0);
     closeSync(this.fd);
     this.fd = null;
+  }
+}
+
+/** Rewrite the RIFF length from the bytes already on disk so a player can seek before close(). */
+export function patchWavHeader(path: string, sampleRate = 16000) {
+  if (!existsSync(path)) return;
+  const size = statSync(path).size;
+  if (size < 44) return;
+  const fd = openSync(path, "r+");
+  try {
+    const header = wavHeader(size - 44, sampleRate);
+    writeSync(fd, header, 0, header.length, 0);
+  } finally {
+    closeSync(fd);
   }
 }
 
