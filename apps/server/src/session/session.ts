@@ -25,6 +25,8 @@ export class Session {
   state: SessionState = emptyState();
   private t0: number | null = null;
   private busy: Promise<unknown> = Promise.resolve();
+  /** Greater than 0 while a queued turn is running. `end` must not queue behind itself. */
+  private depth = 0;
 
   constructor(
     readonly id: string,
@@ -56,7 +58,14 @@ export class Session {
 
   /** Serializes engine work so turns are processed in order. */
   private enqueue<T>(fn: () => Promise<T>): Promise<T> {
-    const next = this.busy.catch(() => undefined).then(fn);
+    const next = this.busy.catch(() => undefined).then(async () => {
+      this.depth += 1;
+      try {
+        return await fn();
+      } finally {
+        this.depth -= 1;
+      }
+    });
     this.busy = next;
     return next;
   }
@@ -128,10 +137,12 @@ export class Session {
   }
 
   end(reason: "time" | "done" | "user") {
-    return this.enqueue(async () => {
+    const finish = async () => {
       if (this.state.ended) return;
       await this.emit({ type: "SESSION_ENDED", payload: { reason } });
-    });
+    };
+    if (this.depth > 0) return finish();
+    return this.enqueue(finish);
   }
 
   idle() {

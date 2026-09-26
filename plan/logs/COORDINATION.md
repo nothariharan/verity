@@ -37,6 +37,7 @@ _None yet. Format: `- [date] [from] question — answer:`_
 
 ## Handoffs
 - 2026-09-26 build agent → human: manual voice tests (`plan/07-testing/VOICE_TEST_SCRIPT.md`) need a person with a headset once P3–P5 are in.
+- 2026-09-26 sync agent: Scribe, Flash, and the mic/player/integrity modules are called from `integrate/product` (`session/live.ts`, candidate room). Further edits to those modules stay on their lane branches and worktrees.
 
 ## Shared-file changes
 - 2026-09-26 build agent: added ADR-016..019 to `DECISIONS.md` (ElevenLabs Scribe STT, Gemini→OpenAI fallback, integrity signal changes, light design + FluidOrb + landing/dashboards).

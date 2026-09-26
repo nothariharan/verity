@@ -10,12 +10,15 @@ import type { Config } from "./config";
 import { verifyChain } from "./log/chain";
 import { openDb } from "./log/db";
 import { EventLog } from "./log/event-log";
+import type { SttProvider, TtsProvider } from "./providers/speech";
 import { SessionHub } from "./session/hub";
-import { newId, type SessionBrain } from "./session/session";
+import { LiveVoice, type LiveSink } from "./session/live";
+import { newId, type Session, type SessionBrain } from "./session/session";
 
 export interface AppDeps {
   config: Config;
   brain?: SessionBrain | null;
+  speech?: { stt: SttProvider; tts: TtsProvider };
   /** Called after a session is created with its inputs (P1 extractor hooks in here). */
   onCreate?: (hub: SessionHub, sessionId: string, input: CreateInput) => Promise<void>;
 }
@@ -121,13 +124,23 @@ export async function buildApp(deps: AppDeps) {
     return reply.send(createReadStream(path));
   });
 
+  const voices = new Map<string, LiveVoice>();
+
   app.get<{ Params: { id: string } }>("/v1/session/:id", { websocket: true }, async (socket, req) => {
     const s = await hub.get(req.params.id);
     const send = (e: VerityEvent) => socket.readyState === 1 && socket.send(JSON.stringify(e));
+    const sink: LiveSink = {
+      json: (msg) => socket.readyState === 1 && socket.send(JSON.stringify(msg)),
+      pcm: (pcm) => socket.readyState === 1 && socket.send(Buffer.from(pcm)),
+    };
     let unsubscribe: (() => void) | null = null;
+    let textMode = true;
 
     socket.on("message", async (data, isBinary) => {
-      if (isBinary) return; // audio arrives in P3
+      if (isBinary) {
+        voices.get(s.id)?.write(asPcm(data));
+        return;
+      }
       let msg: ClientMessage;
       try {
         msg = ClientMessage.parse(JSON.parse(String(data)));
@@ -138,6 +151,7 @@ export async function buildApp(deps: AppDeps) {
       try {
         switch (msg.type) {
           case "HELLO": {
+            textMode = msg.textMode;
             const backlog = await log.read(s.id, msg.lastSeq ?? 0);
             let high = msg.lastSeq ?? 0;
             for (const e of backlog) {
@@ -155,13 +169,24 @@ export async function buildApp(deps: AppDeps) {
             break;
           }
           case "START":
-            await s.start(false);
+            if (!textMode) await ensureVoice(voices, deps, s, sink);
+            await s.start(textMode);
             break;
           case "TEXT_ANSWER":
             await s.textAnswer(msg.text);
             break;
+          case "VAD":
+            voices.get(s.id)?.vad(msg.speaking);
+            break;
+          case "PLAYBACK":
+            break;
+          case "OBSERVATION":
+            await s.emit({ type: "OBSERVATION", payload: { ...msg.observation, id: newId("obs") } });
+            break;
           case "END":
             await s.end("user");
+            await voices.get(s.id)?.close();
+            voices.delete(s.id);
             break;
           default:
             break;
@@ -174,6 +199,24 @@ export async function buildApp(deps: AppDeps) {
   });
 
   return { app, hub, log };
+}
+
+async function ensureVoice(voices: Map<string, LiveVoice>, deps: AppDeps, s: Session, sink: LiveSink) {
+  if (!deps.speech) return;
+  const existing = voices.get(s.id);
+  if (existing) {
+    existing.attach(sink);
+    return;
+  }
+  const voice = new LiveVoice(s, deps.speech.stt, deps.speech.tts, sink);
+  voices.set(s.id, voice);
+  await voice.open();
+}
+
+function asPcm(data: Buffer | ArrayBuffer | Buffer[]): Uint8Array {
+  if (Buffer.isBuffer(data)) return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+  if (data instanceof ArrayBuffer) return new Uint8Array(data);
+  return new Uint8Array(Buffer.concat(data));
 }
 
 async function fileToText(filename: string | undefined, buf: Buffer): Promise<string> {
