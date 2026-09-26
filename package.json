@@ -1,0 +1,22 @@
+{
+  "name": "verity",
+  "private": true,
+  "packageManager": "pnpm@10.32.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter web --filter server dev",
+    "dev:fake": "cross-env PROVIDERS=fake pnpm --parallel --filter web --filter server dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r --if-present test",
+    "test:e2e": "pnpm --filter web test:e2e",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "eval": "pnpm --filter server eval",
+    "latency": "pnpm --filter server latency"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "typescript": "^5.9.3"
+  }
+}
