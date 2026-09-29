@@ -26,6 +26,8 @@
 ## Status board
 Statuses: `todo` · `in-progress` · `verified` · `cut`
 
+The app in `apps/` is ahead of this board. A `todo` row means the phase gate is not closed. It does not mean the code is missing. What has actually been checked is in `logs/VERIFICATION_LOG.md`.
+
 | Phase | Name | Delivers | Status |
 |---|---|---|---|
 | P0 | Foundations | Monorepo, zod contracts, hash-chained event log, fakes, CI | verified (CI run pending) |

@@ -27,3 +27,11 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 .idea/
+
+# Local recordings and extra decks. The three files below were already in the repo.
+*.mp4
+*.pptx
+*.pdf
+!docs/decks/BNB-IDEA-Presentation-Format.pptx
+!docs/decks/Problem_Statements_For BNB.pdf
+!docs/decks/Verity_Truth_Blueprint_(6).pdf

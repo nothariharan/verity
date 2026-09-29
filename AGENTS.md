@@ -33,7 +33,7 @@ The one demo moment that must work: **a case ring swings toward "Owned" while th
 5. Area specs: `03-voice`, `04-intelligence`, `05-frontend`, `06-integrity`
 6. `plan/07-testing/`: how to prove it works
 
-`research/` and `MASTER_AI_INTERVIEW_BOT_BLUEPRINT.md` are early brainstorming under an old working name. They are **reference only**, and they contain rejected ideas and unverified numbers. If they disagree with `plan/`, `plan/` wins.
+`research/` and `docs/reference/MASTER_AI_INTERVIEW_BOT_BLUEPRINT.md` are early brainstorming under an old working name. They are **reference only**, and they contain rejected ideas and unverified numbers. If they disagree with `plan/`, `plan/` wins.
 
 ---
 

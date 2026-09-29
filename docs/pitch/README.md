@@ -1,6 +1,6 @@
 # Verity Pitch & Demo Master Dossier
 
-Welcome to the **Verity Pitch Suite** (`docs/pitch/`). This directory contains the exhaustive stage playbook, mathematical context, minute-by-minute scripts, and judges' Q&A defense for the **BNB International Hackathon (AI/ML Track)**.
+Speaker notes for the BNB hackathon demo. These are stage scripts, not the product spec. The running app is described in the [project README](../../README.md).
 
 ---
 
@@ -8,10 +8,12 @@ Welcome to the **Verity Pitch Suite** (`docs/pitch/`). This directory contains t
 
 | Document | Title | Core Focus & Contents |
 | :--- | :--- | :--- |
-| **[`01_THE_OPTIMAL_DEMO_STRATEGY.md`](file:///C:/Users/HARIHARAN/Desktop/BnB/docs/pitch/01_THE_OPTIMAL_DEMO_STRATEGY.md)** | **The Optimal Live Demo Strategy** | Analysis of the "Judge takes interview" pitfall vs. the winning "Dual-Screen Detective" 2-phase demo format, stage audio tips, and offline fallback. |
-| **[`02_DEEP_TECHNICAL_ARCHITECTURE_AND_THEORY.md`](file:///C:/Users/HARIHARAN/Desktop/BnB/docs/pitch/02_DEEP_TECHNICAL_ARCHITECTURE_AND_THEORY.md)** | **Deep Technical Architecture & Theory** | Down-to-the-metal math: 3-hypothesis simplex, MIT Battleship EIG, Bayesian likelihood updates, speculative dual-drafting, SHA-256 chain, and iris saccade FFTs. |
-| **[`03_LIVE_PITCH_SCRIPT_AND_STAGE_CHOREOGRAPHY.md`](file:///C:/Users/HARIHARAN/Desktop/BnB/docs/pitch/03_LIVE_PITCH_SCRIPT_AND_STAGE_CHOREOGRAPHY.md)** | **Minute-by-Minute Pitch Script** | Exact words to say for the 4-minute presentation, physical stage roles (Anchor, Candidate, Architect), screen transitions, and cue triggers. |
-| **[`04_JUDGES_QNA_DEFENSE_AND_TRAP_ANSWERS.md`](file:///C:/Users/HARIHARAN/Desktop/BnB/docs/pitch/04_JUDGES_QNA_DEFENSE_AND_TRAP_ANSWERS.md)** | **Judges' Q&A Defense & Trap Answers** | Bulletproof, intellectually rigorous answers to the 12 hardest technical, architectural, legal (NYC Local Law 144), and business questions judges will ask. |
+| **[`01_THE_OPTIMAL_DEMO_STRATEGY.md`](01_THE_OPTIMAL_DEMO_STRATEGY.md)** | **The Optimal Live Demo Strategy** | Analysis of the "Judge takes interview" pitfall vs. the winning "Dual-Screen Detective" 2-phase demo format, stage audio tips, and offline fallback. |
+| **[`02_DEEP_TECHNICAL_ARCHITECTURE_AND_THEORY.md`](02_DEEP_TECHNICAL_ARCHITECTURE_AND_THEORY.md)** | **Deep Technical Architecture & Theory** | Down-to-the-metal math: 3-hypothesis simplex, MIT Battleship EIG, Bayesian likelihood updates, speculative dual-drafting, SHA-256 chain, and iris saccade FFTs. |
+| **[`03_LIVE_PITCH_SCRIPT_AND_STAGE_CHOREOGRAPHY.md`](03_LIVE_PITCH_SCRIPT_AND_STAGE_CHOREOGRAPHY.md)** | **Minute-by-Minute Pitch Script** | Exact words to say for the 4-minute presentation, physical stage roles (Anchor, Candidate, Architect), screen transitions, and cue triggers. |
+| **[`04_JUDGES_QNA_DEFENSE_AND_TRAP_ANSWERS.md`](04_JUDGES_QNA_DEFENSE_AND_TRAP_ANSWERS.md)** | **Judges' Q&A Defense & Trap Answers** | Bulletproof, intellectually rigorous answers to the 12 hardest technical, architectural, legal (NYC Local Law 144), and business questions judges will ask. |
+| **[`bhushan/`](bhushan/)** | **Bhooshen's Personal Dossier** | Dedicated folder: speaking script, plain-English breakdown of the Mind, and AI/ML Q&A defense cheat sheet. |
+| **[`hariharan/`](hariharan/)** | **Hariharan's Personal Dossier** | Dedicated folder: master opening/closing script, Voice Floor/AudioWorklet demo guide, and systems/integrity Q&A defense. |
 
 ---
 
