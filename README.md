@@ -2,21 +2,48 @@
 
 **Resumes make claims. Verity checks them, out loud.**
 
-Verity is a voice interviewer that treats every resume claim as a case to investigate. Each case holds three competing hypotheses (**owned**, **contributed**, **surface**), and Verity asks the one question that best separates the two currently tied. The belief shifts live while the candidate speaks, and every shift leaves a receipt: the quote, the audio clip, and the reasoning, kept in a tamper-evident record. Recruiters get a dossier of receipts instead of a score.
+![An open case file: a ring on one page, a waveform on the other](docs/assets/verity-hero.png)
 
-Built for the BNB International Hackathon, AI/ML track (AI-Powered Interview Bot).
+Verity is a voice interviewer. Each line on a resume becomes a case with three hypotheses — **Owned**, **Contributed**, and **Surface** — and Verity asks the question that best separates the two that are still tied. When the belief moves, the dossier keeps a receipt: the quote, the audio clip, and the reason. Recruiters get that record. They do not get a score.
 
-## Status
-Planning complete; implementation starts at phase P0. See [`plan/README.md`](plan/README.md) for the build order and status board.
+Built for the BNB International Hackathon, AI/ML track.
 
-## Start here
-- [`AGENTS.md`](AGENTS.md): rules for anyone (human or AI agent) working in this repo
-- [`plan/00-product/PRODUCT_SPEC.md`](plan/00-product/PRODUCT_SPEC.md): what Verity is
-- [`plan/01-architecture/SYSTEM_ARCHITECTURE.md`](plan/01-architecture/SYSTEM_ARCHITECTURE.md): how it works
-- [`plan/02-phases/`](plan/02-phases/): P0 → P11 with verification gates
-- [`plan/07-testing/`](plan/07-testing/): how we prove it works
+## Run it
 
-## Stack (planned)
-Next.js (latest) · Node + Fastify WebSockets · zod contracts · Drizzle + SQLite · ElevenLabs Scribe realtime STT · ElevenLabs Flash v2.5 TTS · Gemini (OpenAI fallback)
+Node 22 or newer, and pnpm 10.
 
-`research/` and `MASTER_AI_INTERVIEW_BOT_BLUEPRINT.md` are early brainstorming under a previous working name, kept for reference.
+```bash
+pnpm install
+cp .env.example .env
+pnpm dev:fake
+```
+
+`pnpm dev:fake` runs speech and the language model offline. `pnpm dev` uses the keys in `.env` (ElevenLabs for voice, Gemini with an OpenAI fallback). The site is [http://localhost:3000](http://localhost:3000). The realtime server is [http://localhost:8787](http://localhost:8787).
+
+| Path | Who it's for |
+|---|---|
+| `/` | Landing |
+| `/app` | Hiring board. Create an interview, watch it, open the dossier |
+| `/interview/[id]` | The candidate's room |
+| `/me` | Practice on your own resume |
+
+Copy `.env.example` and fill it in locally. `.env` is gitignored. Interview audio and the SQLite log stay in `apps/server/data/`, which is also gitignored.
+
+## What's in the repo
+
+| Path | What it is |
+|---|---|
+| `apps/web` | Next.js app: landing, interview room, dashboards, dossier |
+| `apps/server` | Fastify server: sessions, voice, case engine, hash-chained event log |
+| `packages/contracts` | Shared event types and the reducer |
+| [`plan/`](plan/README.md) | Product spec, architecture, and the phase board |
+| [`docs/`](docs/README.md) | Hackathon write-up and pitch notes |
+| [`research/`](research/README.md) | Early landscape notes, kept for reference |
+
+`research/` and `MASTER_AI_INTERVIEW_BOT_BLUEPRINT.md` use an earlier working name in places. The product name is Verity.
+
+## Stack
+
+Next.js 16 · React 19 · Node and Fastify WebSockets · zod contracts · Drizzle and SQLite (libSQL) · ElevenLabs Scribe realtime speech-to-text · ElevenLabs Flash text-to-speech · Gemini, with OpenAI as fallback.
+
+The camera is not recorded. Beliefs move from the transcript. A receipt plays a slice of the candidate recording stored next to that interview.

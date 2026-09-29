@@ -26,3 +26,8 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 .idea/
+
+# Local decks and screen recordings. The write-up lives in docs/.
+*.mp4
+*.pptx
+*.pdf
