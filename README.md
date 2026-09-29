@@ -40,7 +40,7 @@ Copy `.env.example` and fill it in locally. `.env` is gitignored. Interview audi
 | [`docs/`](docs/README.md) | Hackathon write-up and pitch notes |
 | [`research/`](research/README.md) | Early landscape notes, kept for reference |
 
-`research/` and `MASTER_AI_INTERVIEW_BOT_BLUEPRINT.md` use an earlier working name in places. The product name is Verity.
+`research/` and [`docs/reference/MASTER_AI_INTERVIEW_BOT_BLUEPRINT.md`](docs/reference/MASTER_AI_INTERVIEW_BOT_BLUEPRINT.md) use an earlier working name in places. The product name is Verity.
 
 ## Stack
 

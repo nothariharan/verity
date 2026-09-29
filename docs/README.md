@@ -4,6 +4,8 @@ Background writing for the BNB International Hackathon, AI/ML track. Start with 
 
 These files are the write-up and the NotebookLM source set. Latency, cost, and legal lines in them are notes for the deck, not measurements from this repository.
 
+The early blueprint that used to sit in the repo root is [`reference/MASTER_AI_INTERVIEW_BOT_BLUEPRINT.md`](reference/MASTER_AI_INTERVIEW_BOT_BLUEPRINT.md). Slide files and the demo recording are in `decks/` and `recordings/`. Those binaries are gitignored.
+
 ---
 
 ## 📑 Documentation Index & Content Map

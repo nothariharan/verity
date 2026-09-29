@@ -3,7 +3,7 @@
 
 > **BNB International Hackathon — AI/ML Track**  
 > **Problem Statement 2: AI-Powered Interview Bot**  
-> **Repository Root Master Document: `MASTER_AI_INTERVIEW_BOT_BLUEPRINT.md`**  
+> **Early reference, kept in `docs/reference/`. The product spec is `plan/00-product/PRODUCT_SPEC.md`.**  
 > **Core Thesis:** Moving beyond commoditized "LLM Wrappers" (`Resume → LLM asks 5 questions → 8/10 Score`) to build a **Claim-Driven Interview Intelligence Engine** where the interview is an active, structured scientific investigation.
 
 ---
